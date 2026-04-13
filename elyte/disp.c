@@ -5,6 +5,7 @@
 #include "cli.h"
 #include "disp.h"
 #include "minio.h"
+#include "timer.h"
 
 #include "stm32f3xx_ll_bus.h"
 #include "stm32f3xx_ll_gpio.h"
@@ -140,7 +141,7 @@ void disp_set_enabled(bool enable, disp_cb_t done_cb)
         i2c_write_bytes_dma(SSD1306_I2C_ADDR, cmds, sizeof(cmds));
     }
 
-    cpu_halt(100);
+    timer_halt_ms(100);
 }
 
 bool disp_screen_update(disp_cb_t done_cb)

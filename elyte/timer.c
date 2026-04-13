@@ -34,6 +34,15 @@ tick_t timer_now(void)
     return tick_timer_get_current(&ttim);
 }
 
+void timer_halt_ms(uint32_t ms)
+{
+    const uint64_t ticks_per_second = tick_timer_hal_get_frequency(&ttim);
+    tick_t now = timer_now();
+    tick_t then = now + ms * ticks_per_second / 1000ULL;
+    while (timer_now() < then)
+        ;
+}
+
 uint64_t timer_uptime_ms(void)
 {
     const uint64_t ticks_per_second = tick_timer_hal_get_frequency(&ttim);

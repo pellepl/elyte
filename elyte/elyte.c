@@ -10,6 +10,8 @@
 #include "input.h"
 #include "minio.h"
 #include "ringbuffer.h"
+#include "second.h"
+#include "timer.h"
 #include "uart_driver.h"
 #include "ui.h"
 #include "utils.h"
@@ -92,6 +94,7 @@ int main(void)
     disp_init();
     input_init();
     event_init(event_handler);
+    second_init();
     gfx_init();
     disp_set_enabled(true, NULL);
     ui_init();
@@ -106,7 +109,7 @@ int main(void)
 
         __WFI();
         gpio_set(PIN_LED_G, 0);
-        cpu_halt(10);
+        timer_halt_ms(10);
         gpio_set(PIN_LED_G, 1);
     } // main spinner
 }

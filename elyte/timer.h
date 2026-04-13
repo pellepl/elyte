@@ -32,5 +32,6 @@ tick_t timer_now(void);
 void timer_init(void);
 tick_t timer_up_second(void);
 uint64_t timer_uptime_ms(void);
+void timer_halt_ms(uint32_t ms);
 
 #endif
