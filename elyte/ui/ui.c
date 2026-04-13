@@ -25,7 +25,7 @@ static struct
     event_t ev_repaint;
     timer_t timer_repaint;
     gfx_ctx_t ctx;
-    uint32_t last_active_s;
+    tick_t last_active_ms;
     tick_t last_scroll_t;
     uint32_t abs_scroll_int;
     int32_t kiln_temp;
@@ -217,101 +217,6 @@ int ui_move_towards(int current, int target)
     return current + d / DIV;
 }
 
-static void ui_setting_change_cb(setting_t id, void *val, bool store)
-{
-    switch (id)
-    {
-    case SETTING_TEMP_GRAPH_UPDATE:
-    case SETTING_TEMP_GRAPH_LENGTH:
-        ui_view_graph_setting_change_cb(id, val, store);
-        break;
-    case SETTING_UI_KILN_TEMP:
-    {
-        me.kiln_temp = (int32_t)val;
-        if (store)
-        {
-            ctrl_manual_set_temp(me.kiln_temp);
-            ctrl_manual_set_power(me.kiln_pow * 10);
-            int err = nvmtnv_write(id, (uint8_t *)&val, sizeof(me.kiln_temp));
-            if (err < 0)
-                printf("err storing last ui value %d:%d, %d\n", id, (int)val, err);
-        }
-    }
-    break;
-    case SETTING_UI_KILN_POWER:
-    {
-        me.kiln_pow = (int32_t)val;
-        if (store)
-        {
-            ctrl_manual_set_temp(me.kiln_temp);
-            ctrl_manual_set_power(me.kiln_pow * 10);
-            int err = nvmtnv_write(id, (uint8_t *)&val, sizeof(me.kiln_pow));
-            if (err < 0)
-                printf("err storing last ui value %d:%d, %d\n", id, (int)val, err);
-        }
-    }
-    break;
-    case SETTING_KILN_MAX_TEMP:
-        if (store && me.kiln_temp > (int32_t)val)
-        {
-            ui_setting_change_cb(SETTING_UI_KILN_TEMP, val, true);
-        }
-        break;
-    case SETTING_PID_K_P:
-        ctrl_pid_set_k_p((uint32_t)val);
-        break;
-    case SETTING_PID_K_I:
-        ctrl_pid_set_k_i((uint32_t)val);
-        break;
-    case SETTING_PID_K_D:
-        ctrl_pid_set_k_d((uint32_t)val);
-        break;
-    case SETTING_PID_EPSILON:
-        ctrl_pid_set_epsilon((uint32_t)val);
-        break;
-
-    default:
-        break;
-    }
-}
-static const setting_def_t *ui_setting_get_cb(setting_t id)
-{
-    static setting_def_t ui_setting;
-    switch (id)
-    {
-    case SETTING_UI_KILN_TEMP:
-        ui_setting.id = SETTING_UI_KILN_TEMP;
-        ui_setting.max_value = settings_get_val(SETTING_KILN_MAX_TEMP);
-        ui_setting.min_value = 0;
-        ui_setting.ui_name = "Target temp";
-        ui_setting.unit = UNIT_DEGREE_C;
-        break;
-    case SETTING_UI_KILN_POWER:
-        ui_setting.id = SETTING_UI_KILN_POWER;
-        ui_setting.max_value = (void *)10;
-        ui_setting.min_value = (void *)1;
-        ui_setting.ui_name = "Kiln power";
-        ui_setting.unit = UNIT_INTEGER;
-        break;
-    default:
-        return NULL;
-    }
-    return &ui_setting;
-}
-
-static void *ui_setting_val_cb(setting_t id)
-{
-    switch (id)
-    {
-    case SETTING_UI_KILN_TEMP:
-        return (void *)me.kiln_temp;
-    case SETTING_UI_KILN_POWER:
-        return (void *)me.kiln_pow;
-    default:
-        return 0;
-    }
-}
-
 void ui_init(void)
 {
     me.disp_enabled = true;
@@ -319,16 +224,7 @@ void ui_init(void)
     const ui_view_t *view = UI_VIEWS_START;
     const ui_view_t *view_end = UI_VIEWS_END;
 
-    if (nvmtnv_read(SETTING_UI_KILN_TEMP, (uint8_t *)&me.kiln_temp, sizeof(me.kiln_temp)) < 0)
-    {
-        me.kiln_temp = (uint32_t)settings_get_val(SETTING_KILN_MAX_TEMP) / 2;
-    }
-    if (nvmtnv_read(SETTING_UI_KILN_POWER, (uint8_t *)&me.kiln_pow, sizeof(me.kiln_pow)) < 0)
-    {
-        me.kiln_pow = 10;
-    }
     me.attention = 0;
-    settings_set_cb_fns(ui_setting_change_cb, ui_setting_get_cb, ui_setting_val_cb);
 
     while (view < view_end)
     {
@@ -342,7 +238,7 @@ void ui_init(void)
 
 void ui_active(void)
 {
-    me.last_active_s = sys_get_up_second();
+    me.last_active_ms = timer_uptime_ms();
     if (!me.disp_enabled)
     {
         me.inactivate = false;
@@ -357,7 +253,7 @@ void ui_active(void)
 
 void ui_attention_clear(void)
 {
-    me.attention &= ~ATT_PANIC;
+    me.attention = 0;
 }
 
 int ui_scroll_accelerator(int dscroll, int range)
@@ -404,10 +300,6 @@ static void ui_event(uint32_t type, void *arg)
     {
         ui_active();
     }
-    if (type == EVENT_THERMO) {
-        int t = (int)arg;
-        ui_view_graph_thermo(t);
-    }
 
     if (was_disabled)
         return;
@@ -425,7 +317,7 @@ static void ui_event(uint32_t type, void *arg)
         tick_t dt = (tick_t)sqrtf(now - me.last_scroll_t);
         me.last_scroll_t = now;
         me.abs_scroll_int = me.abs_scroll_int * FACTOR / dt;
-        me.abs_scroll_int += abs((int)arg);
+        me.abs_scroll_int += abs_i32((int)arg);
     }
     break;
 
@@ -433,7 +325,7 @@ static void ui_event(uint32_t type, void *arg)
         if (me.disp_enabled)
         {
             uint32_t now_s = (uint32_t)arg;
-            if (now_s - me.last_active_s > (uint32_t)settings_get_val(SETTING_SCREEN_TIMEOUT) && !me.keep_awake)
+            if (now_s - me.last_active_ms > 10000 && !me.keep_awake)
             {
                 if (ctrl_is_enabled() || me.attention != 0)
                 {

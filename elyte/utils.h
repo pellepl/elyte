@@ -63,6 +63,11 @@ static inline float min_f(float a, float b) { return a < b ? a : b; }
 static inline float abs_f(float a) { return a < 0 ? -a : a; }
 static inline int32_t int_f(float x) { return (int32_t)x; }
 static inline int32_t round_nearest_f(float a) { return (int32_t)(a + (a < 0 ? -0.5f : 0.5f)); }
+static inline int lerp_i32(int from, int to, int where, int end)
+{
+    where = clamp_i32(0, where, end);
+    return from + ((to - from) * where) / end;
+}
 static inline uint32_t clz32(uint32_t x)
 {
     if (x == 0)

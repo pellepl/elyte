@@ -170,8 +170,6 @@ static void i2c_dma_init(void)
     LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA1);
 
     // PB6 = I2C1_SCL, PB7 = I2C1_SDA, AF4, open-drain
-    // If your PORTB(x) abstraction exposes GPIO/pin extraction helpers,
-    // swap these raw GPIOB/LL_GPIO_PIN_x uses for those macros.
     LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_6, LL_GPIO_MODE_ALTERNATE);
     LL_GPIO_SetAFPin_0_7(GPIOB, LL_GPIO_PIN_6, LL_GPIO_AF_4);
     LL_GPIO_SetPinOutputType(GPIOB, LL_GPIO_PIN_6, LL_GPIO_OUTPUT_OPENDRAIN);
@@ -187,12 +185,7 @@ static void i2c_dma_init(void)
     // Reset I2C peripheral before config
     LL_I2C_Disable(I2C1);
 
-    // For your uploaded default system clock setup:
-    // SYSCLK = 8 MHz HSI, APB1 = 8 MHz. Use 400 kHz fast-mode timing. :contentReference[oaicite:1]{index=1}
-    //
-    // This value is the usual Cube/AN4235-style timing for 8 MHz -> 400 kHz.
-    // If your real clock tree differs later, this must be recalculated.
-LL_I2C_SetTiming(I2C1, 0x00100000);
+    LL_I2C_SetTiming(I2C1, 0x00100000);
 
     // Optional cleanup
     LL_I2C_DisableOwnAddress1(I2C1);

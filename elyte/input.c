@@ -62,8 +62,8 @@ static void rotary_init(void)
 
 static void buttons_init(void)
 {
-    // Enable clocks for GPIOA and SYSCFG
-    LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
+    // Enable clocks for GPIOA, GPIOC and SYSCFG
+    LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA | LL_AHB1_GRP1_PERIPH_GPIOC);
     LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
 
     // PA2 = rotary push button
@@ -83,6 +83,21 @@ static void buttons_init(void)
 
     NVIC_SetPriority(EXTI2_TSC_IRQn, 2);
     NVIC_EnableIRQ(EXTI2_TSC_IRQn);
+
+    // PC8 = board button, active low with pull-up on PCB
+    LL_GPIO_SetPinMode(GPIOC, LL_GPIO_PIN_8, LL_GPIO_MODE_INPUT);
+    LL_GPIO_SetPinPull(GPIOC, LL_GPIO_PIN_8, LL_GPIO_PULL_NO);
+
+    // Route EXTI8 to PC8
+    LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTC, LL_SYSCFG_EXTI_LINE8);
+
+    // Trigger on both edges to track press/release
+    LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_8);
+    LL_EXTI_EnableRisingTrig_0_31(LL_EXTI_LINE_8);
+    LL_EXTI_EnableFallingTrig_0_31(LL_EXTI_LINE_8);
+
+    NVIC_SetPriority(EXTI9_5_IRQn, 2);
+    NVIC_EnableIRQ(EXTI9_5_IRQn);
 }
 
 static int16_t input_rot_read(void)
@@ -198,6 +213,24 @@ void EXTI2_TSC_IRQHandler(void)
         else
         {
             event_add_specific(&me.ev_hw_button, EVENT_BUTTON_PRESS, INPUT_BUTTON_ROTARY, input_event);
+        }
+    }
+}
+
+void EXTI9_5_IRQHandler(void);
+void EXTI9_5_IRQHandler(void)
+{
+    if (LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_8))
+    {
+        LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_8);
+
+        if (LL_GPIO_IsInputPinSet(GPIOC, LL_GPIO_PIN_8))
+        {
+            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_BACK, input_event);
+        }
+        else
+        {
+            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_BACK, input_event);
         }
     }
 }

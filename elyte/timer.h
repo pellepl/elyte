@@ -30,5 +30,7 @@ void timer_start(timer_t *timer, timer_callback_fn_t fn, tick_t delta_tick, time
 void timer_stop(timer_t *timer);
 tick_t timer_now(void);
 void timer_init(void);
+tick_t timer_up_second(void);
+uint64_t timer_uptime_ms(void);
 
 #endif

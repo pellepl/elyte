@@ -1,12 +1,17 @@
 #include <stdbool.h>
 #include <stddef.h>
+#include "adc.h"
 #include "board.h"
 #include "cli.h"
+#include "dac.h"
+#include "events.h"
 #include "flash_driver.h"
 #include "gpio_driver.h"
+#include "input.h"
 #include "minio.h"
 #include "ringbuffer.h"
 #include "uart_driver.h"
+#include "ui.h"
 #include "utils.h"
 
 static struct
@@ -58,21 +63,47 @@ static void uart_setup(void)
 }
 
 
+static void event_handler(uint32_t event, void *arg)
+{
+    //printf("ev %d\t%08x\n", event, arg);
+    const event_func_t *ev_fns = EVENT_HANDLERS_START;
+    const event_func_t *ev_fns_end = EVENT_HANDLERS_END;
+    while (ev_fns < ev_fns_end) {
+        ((event_func_t)(*ev_fns))(event, arg);
+        ev_fns++;
+    }
+}
+
 int main(void)
 {
     cpu_init();
     board_init();
     gpio_init();
     gpio_setup();
+    adc_init();
+    dac_init();
     uart_setup();
+    timer_init();
     printf("\n" stringify(BUILD_INFO_TARGET_NAME) "\n");
     printf(stringify(BUILD_INFO_GIT_COMMIT) "@" stringify(BUILD_INFO_HOST_WHO) " " stringify(BUILD_INFO_HOST_WHEN_DATE) " " stringify(BUILD_INFO_HOST_WHEN_TIME) "\n");
     ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
+    disp_init();
+    input_init();
+    event_init(event_handler);
+    gfx_init();
+    disp_set_enabled(true, NULL);
+    ui_init();
+    ui_trigger_update();
+
     while (1)
     {
         consume_uart_rx();
+        input_handle_rotary();
+        while (event_execute_one())
+            ;
+
         __WFI();
         gpio_set(PIN_LED_G, 0);
         cpu_halt(10);

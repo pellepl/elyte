@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include "ui_list.h"
+#include "utils.h"
 
 #define ANIM_SELECT_TOTAL (20)
 #define ANIM_SELECT_ENTER (7)
@@ -95,8 +96,8 @@ static void paint_selector(ui_list_t *list, const gfx_ctx_t *ctx, int y)
     };
     if (anim > 0)
     {
-        a.x0 = lerp(list->x, list->x + list->w, anim - ANIM_SELECT_ENTER, ANIM_SELECT_TOTAL - ANIM_SELECT_ENTER);
-        a.x1 = lerp(list->x + 4, list->x + list->w, anim, ANIM_SELECT_ENTER);
+        a.x0 = lerp_i32(list->x, list->x + list->w, anim - ANIM_SELECT_ENTER, ANIM_SELECT_TOTAL - ANIM_SELECT_ENTER);
+        a.x1 = lerp_i32(list->x + 4, list->x + list->w, anim, ANIM_SELECT_ENTER);
         if (list->anim_select < list->anim_select_max)
             list->anim_select += 1;
     }
@@ -113,7 +114,7 @@ ui_tick_t ui_list_paint(ui_list_t *list, const gfx_ctx_t *ctx)
         bool selected = i == list->selected_index;
         if (list->item_paint)
         {
-            t = min_frame(t, list->item_paint(list, ctx, i, selected, list->x, y, list->w, list->item_h));
+            t = min_u32(t, list->item_paint(list, ctx, i, selected, list->x, y, list->w, list->item_h));
         }
         else
         {

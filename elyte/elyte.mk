@@ -14,8 +14,10 @@ CFLAGS += -DCONFIG_UART_STM32_RX_INTERRUPT
 CFLAGS += -DCONFIG_CORTEX_HALT_USING_SYSCLK
 CFILES += $(wildcard $(APP)/*.c)
 CFILES += $(wildcard $(APP)/fonts/*.c)
+CFILES += $(wildcard $(APP)/ui/*.c)
 INCLUDE += $(APP)
 INCLUDE += $(APP)/fonts
+INCLUDE += $(APP)/ui
 
 LINKER_FILES += $(APP)/$(APP).ld
 

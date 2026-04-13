@@ -1,5 +1,6 @@
+#include "irq.h"
 #include "timer.h"
-#include "cpu.h"
+#include "tick_timer_hal.h"
 
 static tick_timer_t ttim;
 static timer_t *timer_q;
@@ -33,6 +34,12 @@ tick_t timer_now(void)
     return tick_timer_get_current(&ttim);
 }
 
+uint64_t timer_uptime_ms(void)
+{
+    const uint64_t ticks_per_second = tick_timer_hal_get_frequency(&ttim);
+    return (timer_now() * 1000ULL) / ticks_per_second;
+}
+
 void timer_start(timer_t *timer, timer_callback_fn_t fn, tick_t delta_tick, timer_type_t type)
 {
     timer->cb = fn;
@@ -40,15 +47,15 @@ void timer_start(timer_t *timer, timer_callback_fn_t fn, tick_t delta_tick, time
     timer->type = type;
     timer->started = 1;
     tick_t now = tick_timer_get_current(&ttim);
-    cpu_interrupt_disable();
+    uint32_t primask = cpu_primask_save_and_disable();
     timer->t_trigger = now + delta_tick;
     insert_timer(timer);
-    cpu_interrupt_enable();
+    cpu_primask_restore(primask);
 }
 
 void timer_stop(timer_t *timer)
 {
-    cpu_interrupt_disable();
+    uint32_t primask = cpu_primask_save_and_disable();
     timer->started = 0;
     timer_t *prev_t = 0;
     timer_t *cur_t = timer_q;
@@ -74,7 +81,7 @@ void timer_stop(timer_t *timer)
             prev_t->_next = timer->_next;
         }
     }
-    cpu_interrupt_enable();
+    cpu_primask_restore(primask);
 }
 
 void timer_init(void)

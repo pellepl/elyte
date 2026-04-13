@@ -10,7 +10,6 @@ typedef enum
 {
     INPUT_BUTTON_ROTARY,
     INPUT_BUTTON_BACK,
-    INPUT_BUTTON_KILN,
     _INPUT_BUTTON_COUNT
 } input_button_t;
 

@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include "cpu.h"
 #include "event.h"
+#include "irq.h"
 #include "minio.h"
 
 static struct
@@ -17,7 +18,7 @@ bool event_execute_one(void)
     void *arg = NULL;
     uint32_t type = 0;
 
-    cpu_interrupt_disable();
+    uint32_t primask = cpu_primask_save_and_disable();
     volatile event_t *e = me.head;
     if (e != NULL)
     {
@@ -33,7 +34,7 @@ bool event_execute_one(void)
         type = e->type;
         arg = e->arg;
     }
-    cpu_interrupt_enable();
+    cpu_primask_restore(primask);
 
     if (had_ev)
     {
@@ -51,7 +52,7 @@ bool event_execute_one(void)
 
 void event_add_specific(event_t *e, uint32_t type, void *arg, event_func_t fn)
 {
-    cpu_interrupt_disable();
+    uint32_t primask = cpu_primask_save_and_disable();
     if (!e->_posted)
     {
         e->_posted = true;
@@ -69,7 +70,7 @@ void event_add_specific(event_t *e, uint32_t type, void *arg, event_func_t fn)
             me.tail = e;
         }
     }
-    cpu_interrupt_enable();
+    cpu_primask_restore(primask);
 }
 
 void event_add(event_t *e, uint32_t type, void *arg)

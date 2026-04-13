@@ -3,13 +3,14 @@
 #include "cli.h"
 #include "input.h"
 #include "minio.h"
-#include "rtc.h"
-#include "settings.h"
 #include "timer.h"
 #include "ui.h"
 #include "ui_views.h"
 
 // #define TEST_SAMPLES
+
+#define SETTINGS_TEMP_GRAPH_LEN_MAX 10
+#define SETTING_TEMP_GRAPH_LENGTH 10
 
 static struct
 {
@@ -36,7 +37,7 @@ static void graph_add(int spl);
 static void reset(void)
 {
 
-    me.max_len = (uint32_t)settings_get_val(SETTING_TEMP_GRAPH_LENGTH);
+    me.max_len = (uint32_t)SETTING_TEMP_GRAPH_LENGTH;
     me.min_data = me.max_data = me.len = 0;
 }
 
@@ -55,7 +56,7 @@ static void test_sample(void)
         _spl = _spl + ds / 5;
     }
     seed = seed * 4294967291;
-    if (abs(ds) < 3 || abs(seed % 100) < 5)
+    if (abs_i32(ds) < 3 || abs_i32(seed % 100) < 5)
     {
         target_spl = (seed % 1000);
         if (target_spl < 0)
@@ -87,21 +88,6 @@ static void exit(const ui_view_t *this)
     me.zoom_len = 0;
 }
 
-void ui_view_graph_setting_change_cb(setting_t id, void *val, bool store)
-{
-    if (!store)
-        return;
-    switch (id)
-    {
-    case SETTING_TEMP_GRAPH_LENGTH:
-    case SETTING_TEMP_GRAPH_UPDATE:
-        reset();
-        break;
-    default:
-        break;
-    }
-}
-
 static void graph_add(int spl)
 {
     if (spl < -400 || spl > 10000)
@@ -122,8 +108,8 @@ static void graph_add(int spl)
     {
         uint32_t ix = i > me.wix ? (me.max_len - (i - me.wix)) : (me.wix - i);
         int v = me.data[ix];
-        me.min_data = min(me.min_data, v);
-        me.max_data = max(me.max_data, v);
+        me.min_data = min_i32(me.min_data, v);
+        me.max_data = max_i32(me.max_data, v);
     }
     me.wix++;
     if (ui_get_current_view() == &view_graph)
@@ -135,7 +121,7 @@ static void graph_add(int spl)
 void ui_view_graph_thermo(int temp)
 {
     const tick_t now = timer_now();
-    const tick_t update_period = TIMER_MS_TO_TICKS(1000 * (uint32_t)settings_get_val(SETTING_TEMP_GRAPH_UPDATE));
+    const tick_t update_period = TIMER_MS_TO_TICKS(1000 * 1);
     me.spl_sum += temp;
     me.spl_count++;
     const tick_t dt = now - me.last_update_ts;
@@ -187,12 +173,12 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
             if (me.zoom_len == 0)
                 me.zoom_len = 19 * me.len / 20;
             else
-                me.zoom_len = clamp(me.zoom_len - me.len / 20, 100, me.len);
+                me.zoom_len = clamp_i32(100, me.zoom_len - me.len / 20, me.len);
         }
         else
         {
             if (me.zoom_len > 0)
-                me.zoom_len = clamp(me.zoom_len + me.len / 20, 100, me.len);
+                me.zoom_len = clamp_i32(100, me.zoom_len + me.len / 20, me.len);
             if (me.zoom_len > me.len)
                 me.zoom_len = 0;
         }
@@ -228,7 +214,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     const int y0 = ctx->clip.y0;
     const uint32_t w = ctx->clip.x1 - x0;
     const uint32_t h = ctx->clip.y1 - y0 - 1;
-    const uint32_t len = me.zoom_len == 0 ? me.len : (uint32_t)clamp(me.zoom_len, 100, me.len);
+    const uint32_t len = me.zoom_len == 0 ? me.len : (uint32_t)clamp_i32(100, me.zoom_len, me.len);
     uint32_t start_ix = (len > me.wix) ? (me.wix + me.max_len - len) : (me.wix - len);
     uint32_t range = me.max_data - me.min_data;
     int y_mark;
@@ -343,8 +329,8 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
             // prefer a bit of overshoot here to bind curve together
             for (uint32_t i = ix_q8; i <= (ix_q8 + dix_q8 + 0x100); i += 0x100)
             {
-                spl_min = min(me.data[spl_ix], spl_min);
-                spl_max = max(me.data[spl_ix], spl_max);
+                spl_min = min_i32(me.data[spl_ix], spl_min);
+                spl_max = max_i32(me.data[spl_ix], spl_max);
                 spl_ix++;
                 if (spl_ix >= me.max_len)
                     spl_ix = 0;

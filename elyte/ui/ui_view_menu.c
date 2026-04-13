@@ -12,22 +12,18 @@ static struct
 
 enum
 {
-    LIST_ITEM_SETTINGS,
-    LIST_ITEM_KILN,
     LIST_ITEM_TEMPHIST,
     LIST_ITEM_INFO,
 };
 
 static const ui_listitem_t items[] = {
-    [LIST_ITEM_SETTINGS] = (ui_listitem_t){.string = "Settings"},
-    [LIST_ITEM_KILN] = (ui_listitem_t){.string = "Set kiln"},
     [LIST_ITEM_TEMPHIST] = (ui_listitem_t){.string = "Temp history"},
     [LIST_ITEM_INFO] = (ui_listitem_t){.string = "System info"},
 };
 
 static void init(const ui_view_t *this)
 {
-    ui_list_init(&me.list, items, ARRAY_LENGTH(items), LIST_ITEM_KILN, 0, 0, DISP_W, DISP_H);
+    ui_list_init(&me.list, items, ARRAY_LENGTH(items), LIST_ITEM_INFO, 0, 0, DISP_W, DISP_H);
 }
 
 static void enter(const ui_view_t *this)
@@ -43,12 +39,6 @@ static void handle_button(input_button_t button)
     {
         switch (ui_list_get_selected_index(&me.list))
         {
-        case LIST_ITEM_SETTINGS:
-            ui_goto_view(&view_settings, false);
-            break;
-        case LIST_ITEM_KILN:
-            ui_goto_view(&view_kiln, false);
-            break;
         case LIST_ITEM_TEMPHIST:
             ui_goto_view(&view_graph, false);
             break;
