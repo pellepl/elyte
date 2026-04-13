@@ -72,11 +72,11 @@ int main(void)
 
     while (1)
     {
-        //consume_uart_rx();
+        consume_uart_rx();
+        __WFI();
         gpio_set(PIN_LED_G, 0);
         cpu_halt(10);
         gpio_set(PIN_LED_G, 1);
-        cpu_halt(990);
     } // main spinner
 }
 
