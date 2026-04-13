@@ -122,9 +122,6 @@ void adc_init(void)
     LL_ADC_SetCommonPathInternalCh(__LL_ADC_COMMON_INSTANCE(ADC2), LL_ADC_PATH_INTERNAL_VREFINT);
 
     adc_disable_wait();
-    LL_ADC_EnableInternalRegulator(ADC2);
-    adc_delay_us(LL_ADC_DELAY_INTERNAL_REGUL_STAB_US);
-    adc_delay_us(LL_ADC_DELAY_VREFINT_STAB_US);
 
     LL_ADC_StartCalibration(ADC2, LL_ADC_SINGLE_ENDED);
     while (LL_ADC_IsCalibrationOnGoing(ADC2))
@@ -137,6 +134,10 @@ void adc_init(void)
     }
 
     adc_delay_cycles(LL_ADC_DELAY_CALIB_ENABLE_ADC_CYCLES * 4U);
+
+    LL_ADC_EnableInternalRegulator(ADC2);
+    adc_delay_us(LL_ADC_DELAY_INTERNAL_REGUL_STAB_US);
+    adc_delay_us(LL_ADC_DELAY_VREFINT_STAB_US);
 
     LL_ADC_SetResolution(ADC2, LL_ADC_RESOLUTION_12B);
     LL_ADC_SetDataAlignment(ADC2, LL_ADC_DATA_ALIGN_RIGHT);

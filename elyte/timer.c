@@ -36,6 +36,7 @@ tick_t timer_now(void)
 
 void timer_halt_ms(uint32_t ms)
 {
+    //cpu_halt(ms);
     const uint64_t ticks_per_second = tick_timer_hal_get_frequency(&ttim);
     tick_t now = timer_now();
     tick_t then = now + ms * ticks_per_second / 1000ULL;

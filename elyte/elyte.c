@@ -91,14 +91,14 @@ int main(void)
     ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
-    disp_init();
+    //disp_init();
     input_init();
     event_init(event_handler);
     second_init();
-    gfx_init();
-    disp_set_enabled(true, NULL);
-    ui_init();
-    ui_trigger_update();
+    //gfx_init();
+    //disp_set_enabled(true, NULL);
+    //ui_init();
+    //ui_trigger_update();
 
     while (1)
     {
@@ -109,7 +109,7 @@ int main(void)
 
         __WFI();
         gpio_set(PIN_LED_G, 0);
-        timer_halt_ms(10);
+        timer_halt_ms(1);
         gpio_set(PIN_LED_G, 1);
     } // main spinner
 }
