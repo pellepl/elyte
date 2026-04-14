@@ -11,12 +11,15 @@
 #include "utils.h"
 
 #define DEFAULT_VDDA 3.3f
+#define CURR_SENS_R 3.333f
+#define VOLT_SENS_DIV 2.f
 
 static struct
 {
     volatile bool busy;
     adc_t active;
     adc_cb_t cb;
+    float opamp_gain;
     float vdda;
 } me;
 
@@ -55,7 +58,6 @@ static void adc_enable_wait(void)
 static void adc_prepare_single_conversion(uint32_t channel, uint32_t single_diff, uint32_t sample_time)
 {
     adc_disable_wait();
-    LL_ADC_SetChannelSingleDiff(ADC2, LL_ADC_CHANNEL_14, LL_ADC_SINGLE_ENDED);
     LL_ADC_SetChannelSingleDiff(ADC2, channel, single_diff);
     LL_ADC_SetChannelSamplingTime(ADC2, channel, sample_time);
     LL_ADC_REG_SetSequencerLength(ADC2, LL_ADC_REG_SEQ_SCAN_DISABLE);
@@ -68,13 +70,17 @@ static uint32_t opamp_pga_gain_from_current_gain(current_gain_t gain)
     switch (gain)
     {
     case GAIN_X2:
+        me.opamp_gain = 2.f;
         return LL_OPAMP_PGA_GAIN_2;
     case GAIN_X4:
+        me.opamp_gain = 4.f;
         return LL_OPAMP_PGA_GAIN_4;
     case GAIN_X8:
+        me.opamp_gain = 8.f;
         return LL_OPAMP_PGA_GAIN_8;
     case GAIN_X16:
     default:
+        me.opamp_gain = 16.f;
         return LL_OPAMP_PGA_GAIN_16;
     }
 }
@@ -91,6 +97,7 @@ static void opamp2_configure(current_gain_t gain)
     if (gain == GAIN_X1)
     {
         LL_OPAMP_SetFunctionalMode(OPAMP2, LL_OPAMP_MODE_FOLLOWER);
+        me.opamp_gain = 1.f;
     }
     else
     {
@@ -100,7 +107,7 @@ static void opamp2_configure(current_gain_t gain)
     }
 
     LL_OPAMP_Enable(OPAMP2);
-    adc_delay_us(LL_OPAMP_DELAY_STARTUP_US);
+    adc_delay_us(LL_OPAMP_DELAY_STARTUP_US * 3); // play it safe
 }
 
 void adc_init(void)
@@ -119,25 +126,28 @@ void adc_init(void)
 
     LL_ADC_SetCommonClock(__LL_ADC_COMMON_INSTANCE(ADC2), LL_ADC_CLOCK_SYNC_PCLK_DIV4);
     LL_ADC_SetMultimode(__LL_ADC_COMMON_INSTANCE(ADC2), LL_ADC_MULTI_INDEPENDENT);
-    LL_ADC_SetCommonPathInternalCh(__LL_ADC_COMMON_INSTANCE(ADC2), LL_ADC_PATH_INTERNAL_VREFINT);
 
     adc_disable_wait();
 
-    LL_ADC_StartCalibration(ADC2, LL_ADC_SINGLE_ENDED);
-    while (LL_ADC_IsCalibrationOnGoing(ADC2))
-    {
-    }
-
-    LL_ADC_StartCalibration(ADC2, LL_ADC_DIFFERENTIAL_ENDED);
-    while (LL_ADC_IsCalibrationOnGoing(ADC2))
-    {
-    }
-
-    adc_delay_cycles(LL_ADC_DELAY_CALIB_ENABLE_ADC_CYCLES * 4U);
-
     LL_ADC_EnableInternalRegulator(ADC2);
     adc_delay_us(LL_ADC_DELAY_INTERNAL_REGUL_STAB_US);
+
+    LL_ADC_SetCommonPathInternalCh(__LL_ADC_COMMON_INSTANCE(ADC2), LL_ADC_PATH_INTERNAL_VREFINT);
     adc_delay_us(LL_ADC_DELAY_VREFINT_STAB_US);
+
+    printf("single ended calib...\n");
+    LL_ADC_StartCalibration(ADC2, LL_ADC_SINGLE_ENDED);
+    adc_delay_cycles(LL_ADC_DELAY_CALIB_ENABLE_ADC_CYCLES * 4U);
+    while (LL_ADC_IsCalibrationOnGoing(ADC2))
+        ;
+    printf("done\n");
+
+    printf("diff ended calib...\n");
+    LL_ADC_StartCalibration(ADC2, LL_ADC_DIFFERENTIAL_ENDED);
+    adc_delay_cycles(LL_ADC_DELAY_CALIB_ENABLE_ADC_CYCLES * 4U);
+    while (LL_ADC_IsCalibrationOnGoing(ADC2))
+        ;
+    printf("done\n");
 
     LL_ADC_SetResolution(ADC2, LL_ADC_RESOLUTION_12B);
     LL_ADC_SetDataAlignment(ADC2, LL_ADC_DATA_ALIGN_RIGHT);
@@ -148,7 +158,7 @@ void adc_init(void)
     NVIC_EnableIRQ(ADC1_2_IRQn);
 
     opamp2_configure(GAIN_X1);
-    adc_prepare_single_conversion(LL_ADC_CHANNEL_VOPAMP2, LL_ADC_SINGLE_ENDED, LL_ADC_SAMPLINGTIME_181CYCLES_5);
+    adc_prepare_single_conversion(LL_ADC_CHANNEL_VREFINT, LL_ADC_SINGLE_ENDED, LL_ADC_SAMPLINGTIME_601CYCLES_5);
 
     me.vdda = DEFAULT_VDDA;
 }
@@ -175,9 +185,10 @@ int32_t adc_read_current(adc_cb_t cb, current_gain_t gain)
     me.busy = true;
     me.cb = cb;
     me.active = ADC_CURRENT;
+    me.opamp_gain = gain;
 
     opamp2_configure(gain);
-    adc_prepare_single_conversion(LL_ADC_CHANNEL_VOPAMP2, LL_ADC_SINGLE_ENDED, LL_ADC_SAMPLINGTIME_181CYCLES_5);
+    adc_prepare_single_conversion(LL_ADC_CHANNEL_3, LL_ADC_SINGLE_ENDED, LL_ADC_SAMPLINGTIME_181CYCLES_5);
     LL_ADC_REG_StartConversion(ADC2);
     return 0;
 }
@@ -201,7 +212,7 @@ float adc_convert_to_volt(adc_t adc, int32_t value)
     switch (adc)
     {
     case ADC_VOLTAGE:
-        return ((float)value * me.vdda) / (float)(1 << 11);
+        return (VOLT_SENS_DIV * (float)value * me.vdda) / (float)(1 << 11);
     case ADC_CURRENT:
         return ((float)value * me.vdda) / 4095.0f;
     case ADC_VDDA:
@@ -215,7 +226,7 @@ static int32_t adc_value_from_result(uint16_t raw)
 {
     if (me.active == ADC_VOLTAGE)
     {
-        return (int32_t)raw - (1 << 11);
+        return (int32_t)raw - 2048;
     }
     if (me.active == ADC_VDDA)
     {
@@ -227,6 +238,9 @@ static int32_t adc_value_from_result(uint16_t raw)
 void ADC1_2_IRQHandler(void);
 void ADC1_2_IRQHandler(void)
 {
+    if (LL_ADC_IsActiveFlag_OVR(ADC2))
+        LL_ADC_ClearFlag_OVR(ADC2);
+
     if (LL_ADC_IsActiveFlag_EOC(ADC2))
     {
         const int32_t value = adc_value_from_result(LL_ADC_REG_ReadConversionData12(ADC2));
@@ -242,13 +256,15 @@ void ADC1_2_IRQHandler(void)
 
 static void cli_adc_cb(adc_t adc, int32_t value)
 {
+    printf("\n");
+    float volts = adc_convert_to_volt(adc, value);
     switch (adc)
     {
     case ADC_VOLTAGE:
         printf("VOLT ");
         break;
     case ADC_CURRENT:
-        printf("CURR ");
+        printf("CURR %smA ", ftostr(volts / CURR_SENS_R));
         break;
     case ADC_VDDA:
         printf("VDDA ");
@@ -257,7 +273,7 @@ static void cli_adc_cb(adc_t adc, int32_t value)
         printf("???? ");
         break;
     }
-    printf("%sV (%d)\n", ftostr(adc_convert_to_volt(adc, value)), value);
+    printf("%sV (%d)\n", ftostr(volts), value);
 }
 
 static int cli_adc_read(int argc, const char **argv)

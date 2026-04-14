@@ -13,7 +13,7 @@
 #include "second.h"
 #include "timer.h"
 #include "uart_driver.h"
-#include "ui.h"
+// UI DISABLED #include "ui.h"
 #include "utils.h"
 
 static struct
@@ -64,13 +64,13 @@ static void uart_setup(void)
     uart_init(UART_STD, &cfg);
 }
 
-
 static void event_handler(uint32_t event, void *arg)
 {
-    //printf("ev %d\t%08x\n", event, arg);
+    // printf("ev %d\t%08x\n", event, arg);
     const event_func_t *ev_fns = EVENT_HANDLERS_START;
     const event_func_t *ev_fns_end = EVENT_HANDLERS_END;
-    while (ev_fns < ev_fns_end) {
+    while (ev_fns < ev_fns_end)
+    {
         ((event_func_t)(*ev_fns))(event, arg);
         ev_fns++;
     }
@@ -82,7 +82,6 @@ int main(void)
     board_init();
     gpio_init();
     gpio_setup();
-    adc_init();
     dac_init();
     uart_setup();
     timer_init();
@@ -91,14 +90,15 @@ int main(void)
     ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
-    //disp_init();
+    adc_init();
+    // disp_init();
     input_init();
     event_init(event_handler);
     second_init();
-    //gfx_init();
-    //disp_set_enabled(true, NULL);
-    //ui_init();
-    //ui_trigger_update();
+    // gfx_init();
+    // disp_set_enabled(true, NULL);
+    // UI DISABLED ui_init();
+    // UI DISABLED ui_trigger_update();
 
     while (1)
     {

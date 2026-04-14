@@ -1,1 +1,3 @@
 build/
+.parallel.pids
+.codex

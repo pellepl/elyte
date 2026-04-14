@@ -14,12 +14,16 @@
 
 #define ARRAY_LENGTH(x) (sizeof(x) / (sizeof((x)[0])))
 
-#define UI_FONT_MINI (&font_pixeloidsans_9)
+// #define UI_FONT_MINI (&font_pixeloidsans_9)
+// #define UI_FONT_SMALL (&font_roboto_semibold_13)
+// #define UI_FONT_NORMAL (&font_roboto_semibold_16)
+// #define UI_FONT_BIG (&font_roboto_extrabold_20)
+// #define UI_FONT_HUGE (&font_roboto_extrabold_30)
+#define UI_FONT_MINI (&font_roboto_semibold_13)
 #define UI_FONT_SMALL (&font_roboto_semibold_13)
-#define UI_FONT_NORMAL (&font_roboto_semibold_16)
-#define UI_FONT_BIG (&font_roboto_extrabold_20)
-#define UI_FONT_HUGE (&font_roboto_extrabold_30)
-
+#define UI_FONT_NORMAL (&font_roboto_semibold_13)
+#define UI_FONT_BIG (&font_roboto_semibold_13)
+#define UI_FONT_HUGE (&font_roboto_semibold_13)
 #define UI_FONT_ITEM_SMALL UI_FONT_NORMAL
 #define UI_FONT_ITEM UI_FONT_BIG
 
@@ -66,5 +70,3 @@ typedef void (*ui_confirm_cb_t)(bool conf, const void *user);
 void ui_confirm(const char *title, const char *msg, ui_confirm_cb_t cb, const void *user);
 
 void ui_popup(const char *title, const char *msg, const char *button);
-
-
