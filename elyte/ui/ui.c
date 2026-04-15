@@ -25,7 +25,7 @@ static struct
     event_t ev_repaint;
     timer_t timer_repaint;
     gfx_ctx_t ctx;
-    tick_t last_active_ms;
+    uint32_t last_active_s;
     tick_t last_scroll_t;
     uint32_t abs_scroll_int;
     int32_t kiln_temp;
@@ -88,7 +88,6 @@ static void ui_disp_update(void)
     {
         if (!me.disp_enabled)
         {
-            printf("activate disp\n");
             me.ongoing_disp_command = true;
             me.pending_disp_command = true; // force another disp update after enabling it, in order to call current view update func
             disp_set_enabled(true, disp_enable_done_cb);
@@ -105,7 +104,6 @@ static void ui_disp_update(void)
     {
         if (me.disp_enabled)
         {
-            printf("inactivate disp\n");
             me.ongoing_disp_command = true;
             disp_set_enabled(false, disp_enable_done_cb);
             me.disp_enabled = false;
@@ -184,6 +182,7 @@ void ui_set_view(const ui_view_t *v)
     }
     me.view_active = v;
     ui_trigger_update();
+    printf("view set %s\n", v->name);
 }
 
 void ui_goto_view(const ui_view_t *v, bool back)
@@ -197,6 +196,7 @@ void ui_goto_view(const ui_view_t *v, bool back)
     me.view_inactive = me.view_active;
     me.view_active = v;
     me.anim_view_dx = ui_move_towards(0, back ? DISP_W : -DISP_W);
+    printf("view goto %s %c\n", v->name, back ? '<' : '>');
 }
 
 const ui_view_t *ui_get_current_view(void)
@@ -238,17 +238,16 @@ void ui_init(void)
 
 void ui_active(void)
 {
-    me.last_active_ms = timer_uptime_ms();
-    if (!me.disp_enabled)
+    me.last_active_s = timer_uptime_ms() / 1000;
+    if (me.disp_enabled)
+        return;
+    me.inactivate = false;
+    me.activate = true;
+    if (me.view_active && me.view_active->enter)
     {
-        me.inactivate = false;
-        me.activate = true;
-        if (me.view_active && me.view_active->enter)
-        {
-            me.view_active->enter(me.view_active);
-        }
-        ui_trigger_update();
+        me.view_active->enter(me.view_active);
     }
+    ui_trigger_update();
 }
 
 void ui_attention_clear(void)
@@ -296,12 +295,11 @@ static void ui_event(uint32_t type, void *arg)
             enable = true;
         }
     }
-    if (enable)
-    {
-        ui_active();
-    }
 
-    if (was_disabled)
+    if (enable)
+        ui_active();
+
+    if (was_disabled && type != EVENT_UI_DISP_UPDATE)
         return;
 
     switch (type)
@@ -325,9 +323,9 @@ static void ui_event(uint32_t type, void *arg)
         if (me.disp_enabled)
         {
             uint32_t now_s = (uint32_t)arg;
-            if (now_s - me.last_active_ms > 10000 && !me.keep_awake)
+            if (now_s - me.last_active_s > 10 && !me.keep_awake)
             {
-                if (ctrl_is_enabled() || me.attention != 0)
+                if (me.attention != 0)
                 {
                     if (me.view_active != &view_sleep)
                     {

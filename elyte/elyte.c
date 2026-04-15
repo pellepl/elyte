@@ -4,6 +4,7 @@
 #include "board.h"
 #include "cli.h"
 #include "dac.h"
+#include "disp.h"
 #include "events.h"
 #include "flash_driver.h"
 #include "gpio_driver.h"
@@ -13,7 +14,7 @@
 #include "second.h"
 #include "timer.h"
 #include "uart_driver.h"
-// UI DISABLED #include "ui.h"
+#include "ui.h"
 #include "utils.h"
 
 static struct
@@ -47,7 +48,7 @@ static void consume_uart_rx(void)
 
 static void gpio_setup(void)
 {
-    gpio_set(PIN_LED_G, 1);
+    gpio_set(PIN_LED_G, 0);
     gpio_set(PIN_LED_R, 0);
     gpio_config(PIN_LED_G, GPIO_DIRECTION_OUTPUT, GPIO_PULL_NONE);
     gpio_config(PIN_LED_R, GPIO_DIRECTION_OUTPUT, GPIO_PULL_NONE);
@@ -85,32 +86,30 @@ int main(void)
     dac_init();
     uart_setup();
     timer_init();
+    gpio_set(PIN_LED_G, 1);
+    gpio_set(PIN_LED_R, 1);
     printf("\n" stringify(BUILD_INFO_TARGET_NAME) "\n");
     printf(stringify(BUILD_INFO_GIT_COMMIT) "@" stringify(BUILD_INFO_HOST_WHO) " " stringify(BUILD_INFO_HOST_WHEN_DATE) " " stringify(BUILD_INFO_HOST_WHEN_TIME) "\n");
     ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
     adc_init();
-    // disp_init();
+    disp_init();
+    disp_set_enabled(true, NULL);
     input_init();
     event_init(event_handler);
     second_init();
-    // gfx_init();
-    // disp_set_enabled(true, NULL);
-    // UI DISABLED ui_init();
-    // UI DISABLED ui_trigger_update();
+    gfx_init();
+    ui_init();
+    ui_trigger_update();
 
     while (1)
     {
         consume_uart_rx();
-        input_handle_rotary();
         while (event_execute_one())
             ;
 
         __WFI();
-        gpio_set(PIN_LED_G, 0);
-        timer_halt_ms(1);
-        gpio_set(PIN_LED_G, 1);
     } // main spinner
 }
 

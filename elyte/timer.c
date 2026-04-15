@@ -36,10 +36,25 @@ tick_t timer_now(void)
 
 void timer_halt_ms(uint32_t ms)
 {
-    //cpu_halt(ms);
     const uint64_t ticks_per_second = tick_timer_hal_get_frequency(&ttim);
     tick_t now = timer_now();
     tick_t then = now + ms * ticks_per_second / 1000ULL;
+    while (timer_now() < then)
+        ;
+}
+
+// override weak impl
+void cpu_halt(uint32_t ms)
+{
+    timer_halt_ms(ms);
+}
+
+// override weak impl
+void cpu_halt_us(uint32_t us)
+{
+    const uint64_t ticks_per_second = tick_timer_hal_get_frequency(&ttim);
+    tick_t now = timer_now();
+    tick_t then = now + us * ticks_per_second / 1000000ULL;
     while (timer_now() < then)
         ;
 }

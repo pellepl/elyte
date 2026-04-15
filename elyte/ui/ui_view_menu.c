@@ -80,4 +80,6 @@ UI_DECLARE_VIEW view_menu = {
     .enter = enter,
     .handle_event = handle_event,
     .paint = paint,
+    .name = "MNU",
+
 };

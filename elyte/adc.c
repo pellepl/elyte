@@ -135,20 +135,17 @@ void adc_init(void)
     LL_ADC_SetCommonPathInternalCh(__LL_ADC_COMMON_INSTANCE(ADC2), LL_ADC_PATH_INTERNAL_VREFINT);
     adc_delay_us(LL_ADC_DELAY_VREFINT_STAB_US);
 
-    printf("single ended calib...\n");
     LL_ADC_StartCalibration(ADC2, LL_ADC_SINGLE_ENDED);
-    adc_delay_cycles(LL_ADC_DELAY_CALIB_ENABLE_ADC_CYCLES * 4U);
+    cpu_halt(10);
     while (LL_ADC_IsCalibrationOnGoing(ADC2))
         ;
-    printf("done\n");
+    cpu_halt(10);
 
-    printf("diff ended calib...\n");
     LL_ADC_StartCalibration(ADC2, LL_ADC_DIFFERENTIAL_ENDED);
-    adc_delay_cycles(LL_ADC_DELAY_CALIB_ENABLE_ADC_CYCLES * 4U);
     while (LL_ADC_IsCalibrationOnGoing(ADC2))
         ;
-    printf("done\n");
-
+    cpu_halt(10);
+    
     LL_ADC_SetResolution(ADC2, LL_ADC_RESOLUTION_12B);
     LL_ADC_SetDataAlignment(ADC2, LL_ADC_DATA_ALIGN_RIGHT);
     LL_ADC_REG_SetTriggerSource(ADC2, LL_ADC_REG_TRIG_SOFTWARE);

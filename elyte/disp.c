@@ -12,7 +12,7 @@
 #include "stm32f3xx_ll_i2c.h"
 #include "stm32f3xx_ll_dma.h"
 
-#define SSD1306_I2C_ADDR 0x3C
+#define SSD1306_I2C_ADDR 0x3c
 
 static struct
 {
@@ -47,8 +47,6 @@ static void i2c_write_bytes_dma(uint8_t addr, const uint8_t *data, uint16_t size
     if (LL_I2C_IsActiveFlag_NACK(I2C1))
         LL_I2C_ClearFlag_NACK(I2C1);
 
-    // New I2C peripheral on F3:
-    // Configure slave address, number of bytes, AUTOEND, and generate START.
     LL_I2C_HandleTransfer(I2C1,
                           (uint32_t)(addr << 1),
                           LL_I2C_ADDRSLAVE_7BIT,
@@ -106,10 +104,10 @@ void disp_set_enabled(bool enable, disp_cb_t done_cb)
 
     if (enable)
     {
-        const uint8_t init_cmds[] = {
-            0x00,       // command mode indicator
-            0xAE,       // Display OFF
-            0xD5, 0x80, // Set display clock divide ratio/oscillator frequency
+        static const uint8_t init_cmds[] = {
+            0x00,             // command mode indicator
+            0xAE,             // Display OFF
+            0xD5, 0x80,       // Set display clock divide ratio/oscillator frequency
             0xA8, DISP_H - 1, // Set multiplex ratio
             0xD3, 0x00,       // Set display offset
             0x40,             // Set start line
@@ -132,10 +130,11 @@ void disp_set_enabled(bool enable, disp_cb_t done_cb)
     }
     else
     {
-        const uint8_t cmds[] = {
-            0x00,       // command mode indicator
-            0x8D, 0x10, // Disable charge pump
-            0xAE,       // Display OFF
+        static const uint8_t cmds[] = {
+            0x00, // command mode indicator
+            0x8D,
+            0x10, // Disable charge pump
+            0xAE, // Display OFF
         };
 
         i2c_write_bytes_dma(SSD1306_I2C_ADDR, cmds, sizeof(cmds));
@@ -165,9 +164,7 @@ uint8_t *disp_gbuf(void)
 
 static void i2c_dma_init(void)
 {
-    // Enable clocks
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_I2C1);
-    LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
     LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA1);
 
     // PB6 = I2C1_SCL, PB7 = I2C1_SDA, AF4, open-drain
@@ -183,10 +180,16 @@ static void i2c_dma_init(void)
     LL_GPIO_SetPinSpeed(GPIOB, LL_GPIO_PIN_7, LL_GPIO_SPEED_FREQ_HIGH);
     LL_GPIO_SetPinPull(GPIOB, LL_GPIO_PIN_7, LL_GPIO_PULL_UP);
 
-    // Reset I2C peripheral before config
     LL_I2C_Disable(I2C1);
 
-    LL_I2C_SetTiming(I2C1, 0x00100000);
+    const uint32_t timing =
+        (1 << 28) | // PRESC
+        (0 << 20) | // SCLDEL
+        (0 << 16) | // SDADEL
+        (0 << 8) |  // SCLH
+        (0 << 0);   // SCLL
+
+    LL_I2C_SetTiming(I2C1, timing);
 
     // Optional cleanup
     LL_I2C_DisableOwnAddress1(I2C1);
@@ -284,6 +287,11 @@ void DMA1_Channel6_IRQHandler(void)
     }
 }
 
+static void cli_disp_cb(int err)
+{
+    printf("\nDISP cb ret %d\n", err);
+}
+
 static int cli_disp_init(int argc, const char **argv)
 {
     (void)argc;
@@ -295,7 +303,7 @@ CLI_FUNCTION(cli_disp_init, "disp_init", ":");
 
 static int cli_disp_ena(int argc, const char **argv)
 {
-    disp_set_enabled(argc == 0 || strtol(argv[0], NULL, 0), NULL);
+    disp_set_enabled(argc == 0 || strtol(argv[0], NULL, 0), cli_disp_cb);
     return 0;
 }
 CLI_FUNCTION(cli_disp_ena, "disp_ena", "<x>:");
@@ -303,6 +311,6 @@ CLI_FUNCTION(cli_disp_ena, "disp_ena", "<x>:");
 static int cli_disp_upd(int argc, const char **argv)
 {
     memset(me.gfx_buffer, argc == 0 ? 0x00 : strtol(argv[0], NULL, 0), sizeof(me.gfx_buffer));
-    return disp_screen_update(NULL) ? 0 : -1;
+    return disp_screen_update(cli_disp_cb) ? 0 : -1;
 }
 CLI_FUNCTION(cli_disp_upd, "disp_upd", "<x>:");

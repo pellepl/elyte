@@ -107,4 +107,5 @@ UI_DECLARE_VIEW view_confirm = {
     .exit = exit,
     .handle_event = handle_event,
     .paint = paint,
+    .name = "OK?",
 };

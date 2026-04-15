@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "timer.h"
 #include "minio.h"
 #include "board.h"
@@ -18,16 +19,14 @@ static struct
     tick_t button_release_tick[_INPUT_BUTTON_COUNT];
     event_t ev_hw_button;
     event_t ev_button;
+    event_t ev_hw_scroll;
     event_t ev_scroll;
     int16_t rot_prev;
-    int acc_rot;
 } me;
 
 static void rotary_init(void)
 {
-    // Enable clocks for TIM2 and GPIOA
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
-    LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
 
     // PA0 = TIM2_CH1, PA1 = TIM2_CH2
     // Input floating equivalent on F3: input mode + no pull
@@ -40,7 +39,7 @@ static void rotary_init(void)
     LL_GPIO_SetPinPull(GPIOA, LL_GPIO_PIN_1, LL_GPIO_PULL_UP);
 
     // Configure TIM2 for encoder mode
-    LL_TIM_SetEncoderMode(TIM2, LL_TIM_ENCODERMODE_X2_TI1);
+    LL_TIM_SetEncoderMode(TIM2, LL_TIM_ENCODERMODE_X4_TI12);
     LL_TIM_IC_SetPolarity(TIM2, LL_TIM_CHANNEL_CH1, LL_TIM_IC_POLARITY_RISING);
     LL_TIM_IC_SetPolarity(TIM2, LL_TIM_CHANNEL_CH2, LL_TIM_IC_POLARITY_RISING);
     LL_TIM_IC_SetFilter(TIM2, LL_TIM_CHANNEL_CH1, LL_TIM_IC_FILTER_FDIV16_N8);
@@ -54,16 +53,29 @@ static void rotary_init(void)
     LL_TIM_EnableIT_CC1(TIM2);
     LL_TIM_EnableIT_CC2(TIM2);
 
-    NVIC_SetPriority(TIM2_IRQn, 1);
+    NVIC_SetPriority(TIM2_IRQn, 2);
     NVIC_EnableIRQ(TIM2_IRQn);
 
     LL_TIM_EnableCounter(TIM2);
+
+    // rotary pins
+    LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTA, LL_SYSCFG_EXTI_LINE0);
+    LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_0);
+    LL_EXTI_EnableRisingTrig_0_31(LL_EXTI_LINE_0);
+    LL_EXTI_EnableFallingTrig_0_31(LL_EXTI_LINE_0);
+    LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTA, LL_SYSCFG_EXTI_LINE1);
+    LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_1);
+    LL_EXTI_EnableRisingTrig_0_31(LL_EXTI_LINE_1);
+    LL_EXTI_EnableFallingTrig_0_31(LL_EXTI_LINE_1);
+
+    NVIC_SetPriority(EXTI0_IRQn, 2);
+    NVIC_EnableIRQ(EXTI0_IRQn);
+    NVIC_SetPriority(EXTI1_IRQn, 2);
+    NVIC_EnableIRQ(EXTI1_IRQn);
 }
 
 static void buttons_init(void)
 {
-    // Enable clocks for GPIOA, GPIOC and SYSCFG
-    LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA | LL_AHB1_GRP1_PERIPH_GPIOC);
     LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
 
     // PA2 = rotary push button
@@ -72,11 +84,8 @@ static void buttons_init(void)
     // pressed  -> pin reads low
     LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_2, LL_GPIO_MODE_INPUT);
     LL_GPIO_SetPinPull(GPIOA, LL_GPIO_PIN_2, LL_GPIO_PULL_UP);
-
     // Route EXTI2 to PA2
     LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTA, LL_SYSCFG_EXTI_LINE2);
-
-    // Trigger on both edges
     LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_2);
     LL_EXTI_EnableRisingTrig_0_31(LL_EXTI_LINE_2);
     LL_EXTI_EnableFallingTrig_0_31(LL_EXTI_LINE_2);
@@ -87,11 +96,8 @@ static void buttons_init(void)
     // PC8 = board button, active low with pull-up on PCB
     LL_GPIO_SetPinMode(GPIOC, LL_GPIO_PIN_8, LL_GPIO_MODE_INPUT);
     LL_GPIO_SetPinPull(GPIOC, LL_GPIO_PIN_8, LL_GPIO_PULL_NO);
-
     // Route EXTI8 to PC8
     LL_SYSCFG_SetEXTISource(LL_SYSCFG_EXTI_PORTC, LL_SYSCFG_EXTI_LINE8);
-
-    // Trigger on both edges to track press/release
     LL_EXTI_EnableIT_0_31(LL_EXTI_LINE_8);
     LL_EXTI_EnableRisingTrig_0_31(LL_EXTI_LINE_8);
     LL_EXTI_EnableFallingTrig_0_31(LL_EXTI_LINE_8);
@@ -112,18 +118,15 @@ void input_init(void)
     me.rot_prev = input_rot_read();
 }
 
-void input_handle_rotary(void)
+static void scroll_event(uint32_t type, void *arg)
 {
     int16_t rot = input_rot_read();
-    me.acc_rot += rot - me.rot_prev;
-    me.rot_prev = rot;
-
-    if (me.acc_rot / INPUT_ROTARY_DIVISOR != 0)
+    if (me.rot_prev != rot)
     {
-        event_add(&me.ev_scroll, EVENT_UI_SCRL, (void *)(int)(me.acc_rot / INPUT_ROTARY_DIVISOR));
-        me.acc_rot -= INPUT_ROTARY_DIVISOR * (me.acc_rot / INPUT_ROTARY_DIVISOR);
         me.button_during_rotation_mask |= me.button_mask;
+        event_add(&me.ev_scroll, EVENT_UI_SCRL, (void *)(int)(me.rot_prev - rot));
     }
+    me.rot_prev = rot;
 }
 
 bool input_is_button_pressed(input_button_t button)
@@ -131,7 +134,7 @@ bool input_is_button_pressed(input_button_t button)
     return (me.button_mask & (1 << button)) != 0;
 }
 
-static void input_event(uint32_t type, void *arg)
+static void button_event(uint32_t type, void *arg)
 {
     switch (type)
     {
@@ -167,22 +170,30 @@ static void input_event(uint32_t type, void *arg)
         me.button_during_rotation_mask &= ~butmask;
         break;
     }
-
-    case EVENT_SECOND_TICK:
-    {
-        //uint32_t now_s = (uint32_t)arg;
-        if (me.button_mask == 0)
-            break;
-        // TODO PETER longpress
-
-        break;
-    }
-
     default:
         break;
     }
 }
-EVENT_HANDLER(input_event);
+
+static void event_handler(uint32_t type, void *arg)
+{
+
+    switch (type)
+    {
+    case EVENT_SECOND_TICK:
+    {
+        if (me.button_mask == 0)
+            break;
+        uint32_t now_s = (uint32_t)arg;
+        // TODO PETER longpress
+
+        break;
+    }
+    default:
+        break;
+    }
+}
+EVENT_HANDLER(event_handler);
 
 void TIM2_IRQHandler(void);
 void TIM2_IRQHandler(void)
@@ -199,6 +210,22 @@ void TIM2_IRQHandler(void)
     }
 }
 
+void EXTI0_IRQHandler(void);
+void EXTI0_IRQHandler(void)
+{
+    if (LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_0))
+    {
+        LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_0);
+        event_add_specific(&me.ev_hw_scroll, EVENT_UI_SCRL, NULL, scroll_event);
+    }
+}
+void EXTI1_IRQHandler(void);
+void EXTI1_IRQHandler(void)
+{
+    if (LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_1))
+        LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_1);
+}
+
 void EXTI2_TSC_IRQHandler(void);
 void EXTI2_TSC_IRQHandler(void)
 {
@@ -208,11 +235,11 @@ void EXTI2_TSC_IRQHandler(void)
 
         if (LL_GPIO_IsInputPinSet(GPIOA, LL_GPIO_PIN_2))
         {
-            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_RELEASE, INPUT_BUTTON_ROTARY, input_event);
+            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_ROTARY, button_event);
         }
         else
         {
-            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_PRESS, INPUT_BUTTON_ROTARY, input_event);
+            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_ROTARY, button_event);
         }
     }
 }
@@ -226,11 +253,11 @@ void EXTI9_5_IRQHandler(void)
 
         if (LL_GPIO_IsInputPinSet(GPIOC, LL_GPIO_PIN_8))
         {
-            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_BACK, input_event);
+            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_ROTARY, button_event);
         }
         else
         {
-            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_BACK, input_event);
+            event_add_specific(&me.ev_hw_button, EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_ROTARY, button_event);
         }
     }
 }

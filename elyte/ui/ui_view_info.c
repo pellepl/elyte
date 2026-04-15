@@ -6,7 +6,7 @@
 #define MAX_LINES 25
 
 static int32_t y_offs = 0;
-static status_event_info_t ctrl;
+static status_event_info_t info;
 
 static void exit(const ui_view_t *this)
 {
@@ -32,8 +32,8 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         }
         ui_trigger_update();
         break;
-    case EVENT_CONTROL_STATUS:
-        ctrl = *((status_event_info_t *)arg);
+    case EVENT_STATUS:
+        info = *((status_event_info_t *)arg);
         ui_trigger_update();
         break;
     default:
@@ -53,16 +53,10 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     int y = y_offs;
     int x = 0;
     char str[32];
-    sprintf(str, "Kiln %s", ctrl_is_enabled() ? "ON" : "OFF");
+    sprintf(str, "Build %s", stringify(BUILD_INFO_GIT_COMMIT));
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
-    sprintf(str, "Temp %dC", ctrl.current_temp);
-    gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
-    NL;
-    sprintf(str, "Target temp %dC", ctrl.target_temp);
-    gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
-    NL;
-    sprintf(str, "Power %d%%", ctrl.power * 10);
+    sprintf(str, "DAC %d", info.dac);
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
 
@@ -73,4 +67,5 @@ UI_DECLARE_VIEW view_info = {
     .handle_event = handle_event,
     .paint = paint,
     .exit = exit,
+    .name = "INF",
 };

@@ -35,6 +35,10 @@ void dac_set(uint32_t dac)
     LL_DAC_ConvertData12RightAligned(DAC1, LL_DAC_CHANNEL_1, me.dac_val);
 }
 
+uint32_t dac_get(void) {
+    return me.dac_val;
+}
+
 static int cli_dac_set(int argc, const char **argv)
 {
     if (argc > 0) {
