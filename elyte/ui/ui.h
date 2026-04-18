@@ -61,7 +61,8 @@ void ui_init(void);
 void ui_goto_view(const ui_view_t *v, bool back);
 int ui_move_towards(int current, int target);
 void ui_active(void);
-int ui_scroll_accelerator(int dscroll, int range);
+int ui_scroll_range_accelerator(int dscroll, int range);
+int ui_scroll_time_accelerator(int dscroll);
 
 typedef void (*ui_confirm_cb_t)(bool conf, const void *user);
 void ui_confirm(const char *title, const char *msg, ui_confirm_cb_t cb, const void *user);

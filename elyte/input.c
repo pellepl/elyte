@@ -16,6 +16,8 @@ static struct
 {
     uint32_t button_mask;
     uint32_t button_during_rotation_mask;
+    uint32_t button_longpress_mask;
+    uint32_t button_press_s[_INPUT_BUTTON_COUNT];
     tick_t button_release_tick[_INPUT_BUTTON_COUNT];
     event_t ev_hw_button;
     event_t ev_button;
@@ -144,6 +146,7 @@ static void button_event(uint32_t type, void *arg)
         if (but >= _INPUT_BUTTON_COUNT)
             break;
         me.button_mask |= 1 << but;
+        me.button_press_s[but] = timer_uptime_ms() / 1000;
         break;
     }
 
@@ -157,7 +160,8 @@ static void button_event(uint32_t type, void *arg)
         tick_t now = timer_now();
 
         if (((me.button_mask & butmask) != 0) &&
-            ((me.button_during_rotation_mask & butmask) == 0))
+            ((me.button_during_rotation_mask & butmask) == 0) &&
+            ((me.button_longpress_mask & butmask) == 0))
         {
             if (now - me.button_release_tick[but] > CLICK_COOLDOWN_TICKS)
             {
@@ -168,6 +172,7 @@ static void button_event(uint32_t type, void *arg)
         me.button_release_tick[but] = now;
         me.button_mask &= ~butmask;
         me.button_during_rotation_mask &= ~butmask;
+        me.button_longpress_mask &= ~butmask;
         break;
     }
     default:
@@ -185,8 +190,15 @@ static void event_handler(uint32_t type, void *arg)
         if (me.button_mask == 0)
             break;
         uint32_t now_s = (uint32_t)arg;
-        // TODO PETER longpress
-
+        for (input_button_t but = 0; but < _INPUT_BUTTON_COUNT; but++)
+        {
+            if (!input_is_button_pressed(but) ||
+                (now_s - me.button_press_s[but] < INPUT_LONG_PRESS_SEC) ||
+                (me.button_during_rotation_mask & (1 << but) != 0))
+                continue;
+            me.button_longpress_mask |= (1 << but);
+            event_add(&me.ev_button, EVENT_UI_PRESSHOLD, (void *)but);
+        }
         break;
     }
     default:

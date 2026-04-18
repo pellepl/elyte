@@ -26,10 +26,9 @@ static struct
     timer_t timer_repaint;
     gfx_ctx_t ctx;
     uint32_t last_active_s;
+    int32_t last_scroll;
     tick_t last_scroll_t;
     uint32_t abs_scroll_int;
-    int32_t kiln_temp;
-    uint32_t kiln_pow;
     uint32_t attention;
     bool keep_awake;
 } me;
@@ -233,7 +232,7 @@ void ui_init(void)
         view++;
     }
 
-    ui_set_view(&view_menu);
+    ui_set_view(&view_main);
 }
 
 void ui_active(void)
@@ -255,7 +254,7 @@ void ui_attention_clear(void)
     me.attention = 0;
 }
 
-int ui_scroll_accelerator(int dscroll, int range)
+int ui_scroll_range_accelerator(int dscroll, int range)
 {
     int mul = 1;
     if (range == 0 || range > 1000)
@@ -277,6 +276,13 @@ int ui_scroll_accelerator(int dscroll, int range)
         mul = range / 200;
     }
     return dscroll * mul;
+}
+
+int ui_scroll_time_accelerator(int dscroll)
+{
+    if (dscroll == 0)
+        return 0;
+    return dscroll < 0 ? -me.abs_scroll_int : me.abs_scroll_int;
 }
 
 static void ui_event(uint32_t type, void *arg)
@@ -310,12 +316,19 @@ static void ui_event(uint32_t type, void *arg)
         break;
     case EVENT_UI_SCRL:
     {
-#define FACTOR 26
+#define FACTOR 24
+        int scroll = (int)arg;
         tick_t now = timer_now();
         tick_t dt = (tick_t)sqrtf(now - me.last_scroll_t);
+        if (sign_i32(scroll) != sign_i32(me.last_scroll))
+            me.last_scroll_t = 0;
+        if (me.last_scroll_t == 0 || now - me.last_scroll_t > TIMER_MS_TO_TICKS(400))
+            me.abs_scroll_int = 0;
+        else
+            me.abs_scroll_int = me.abs_scroll_int * FACTOR / dt;
+        me.abs_scroll_int += abs_i32(scroll);
+        me.last_scroll = scroll;
         me.last_scroll_t = now;
-        me.abs_scroll_int = me.abs_scroll_int * FACTOR / dt;
-        me.abs_scroll_int += abs_i32((int)arg);
     }
     break;
 
@@ -323,7 +336,7 @@ static void ui_event(uint32_t type, void *arg)
         if (me.disp_enabled)
         {
             uint32_t now_s = (uint32_t)arg;
-            if (now_s - me.last_active_s > 10 && !me.keep_awake)
+            if (now_s - me.last_active_s > 60 && !me.keep_awake)
             {
                 if (me.attention != 0)
                 {

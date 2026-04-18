@@ -3,6 +3,7 @@
 #include "adc.h"
 #include "board.h"
 #include "cli.h"
+#include "controller.h"
 #include "dac.h"
 #include "disp.h"
 #include "events.h"
@@ -85,20 +86,21 @@ int main(void)
     gpio_setup();
     dac_init();
     uart_setup();
-    timer_init();
-    gpio_set(PIN_LED_G, 1);
-    gpio_set(PIN_LED_R, 1);
     printf("\n" stringify(BUILD_INFO_TARGET_NAME) "\n");
     printf(stringify(BUILD_INFO_GIT_COMMIT) "@" stringify(BUILD_INFO_HOST_WHO) " " stringify(BUILD_INFO_HOST_WHEN_DATE) " " stringify(BUILD_INFO_HOST_WHEN_TIME) "\n");
+    gpio_set(PIN_LED_G, 1);
+    gpio_set(PIN_LED_R, 1);
+    timer_init();
     ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
     adc_init();
+    event_init(event_handler);
+    input_init();
+    second_init();
+    ctrl_init();
     disp_init();
     disp_set_enabled(true, NULL);
-    input_init();
-    event_init(event_handler);
-    second_init();
     gfx_init();
     ui_init();
     ui_trigger_update();

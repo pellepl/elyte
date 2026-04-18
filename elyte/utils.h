@@ -56,6 +56,7 @@ static inline uint32_t min_u32(uint32_t a, uint32_t b) { return a < b ? a : b; }
 static inline int32_t max_i32(int32_t a, int32_t b) { return a > b ? a : b; }
 static inline int32_t min_i32(int32_t a, int32_t b) { return a < b ? a : b; }
 static inline int32_t abs_i32(int32_t a) { return a < 0 ? -a : a; }
+static inline int32_t sign_i32(int32_t a) { return a < 0 ? -1 : 1; }
 static inline uint32_t clamp_u32(uint32_t min, uint32_t a, uint32_t max) { return a < min ? min : (a > max ? max : a); }
 static inline uint32_t clamp_i32(int32_t min, int32_t a, int32_t max) { return a < min ? min : (a > max ? max : a); }
 static inline float max_f(float a, float b) { return a > b ? a : b; }

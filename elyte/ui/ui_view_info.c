@@ -6,7 +6,7 @@
 #define MAX_LINES 25
 
 static int32_t y_offs = 0;
-static status_event_info_t info;
+static status_info_t info;
 
 static void exit(const ui_view_t *this)
 {
@@ -33,7 +33,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         ui_trigger_update();
         break;
     case EVENT_STATUS:
-        info = *((status_event_info_t *)arg);
+        info = *((status_info_t *)arg);
         ui_trigger_update();
         break;
     default:
@@ -56,7 +56,13 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     sprintf(str, "Build %s", stringify(BUILD_INFO_GIT_COMMIT));
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
-    sprintf(str, "DAC %d", info.dac);
+    sprintf(str, "DAC   %d", info.dac);
+    gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
+    NL;
+    sprintf(str, "CURR %dmA", (int32_t)info.current_avg * 1000);
+    gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
+    NL;
+    sprintf(str, "VOLT %dmV", (int32_t)info.voltage_avg * 1000);
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
 

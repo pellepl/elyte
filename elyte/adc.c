@@ -19,8 +19,19 @@ static struct
     volatile bool busy;
     adc_t active;
     adc_cb_t cb;
-    float opamp_gain;
+    current_gain_t opamp_gain;
+    float gain_factor;
     float vdda;
+
+    struct
+    {
+        volatile bool active;
+        volatile bool stop;
+        timer_t timer;
+        volatile current_gain_t gain_set;
+        adc_t adc;
+        adc_cb_t cb;
+    } cont;
 } me;
 
 static void adc_delay_cycles(uint32_t cycles)
@@ -65,30 +76,11 @@ static void adc_prepare_single_conversion(uint32_t channel, uint32_t single_diff
     adc_enable_wait();
 }
 
-static uint32_t opamp_pga_gain_from_current_gain(current_gain_t gain)
-{
-    switch (gain)
-    {
-    case GAIN_X2:
-        me.opamp_gain = 2.f;
-        return LL_OPAMP_PGA_GAIN_2;
-    case GAIN_X4:
-        me.opamp_gain = 4.f;
-        return LL_OPAMP_PGA_GAIN_4;
-    case GAIN_X8:
-        me.opamp_gain = 8.f;
-        return LL_OPAMP_PGA_GAIN_8;
-    case GAIN_X16:
-    default:
-        me.opamp_gain = 16.f;
-        return LL_OPAMP_PGA_GAIN_16;
-    }
-}
-
 _Static_assert(PIN_CURR_H == PORTB(0), "OPAMP2 non-inv input misconfigured (LL_OPAMP_INPUT_NONINVERT_IO2)");
 
 static void opamp2_configure(current_gain_t gain)
 {
+    me.opamp_gain = gain;
     LL_OPAMP_Disable(OPAMP2);
     LL_OPAMP_SetTrimmingMode(OPAMP2, LL_OPAMP_TRIMMING_FACTORY);
     LL_OPAMP_SetInputsMuxMode(OPAMP2, LL_OPAMP_INPUT_MUX_DISABLE);
@@ -96,14 +88,35 @@ static void opamp2_configure(current_gain_t gain)
 
     if (gain == GAIN_X1)
     {
+        me.gain_factor = 1.0f;
         LL_OPAMP_SetFunctionalMode(OPAMP2, LL_OPAMP_MODE_FOLLOWER);
-        me.opamp_gain = 1.f;
     }
     else
     {
+        uint32_t pga_gain;
+        switch (gain)
+        {
+        case GAIN_X2:
+            pga_gain = LL_OPAMP_PGA_GAIN_2;
+            me.gain_factor = 2.f;
+            break;
+        case GAIN_X4:
+            pga_gain = LL_OPAMP_PGA_GAIN_4;
+            me.gain_factor = 4.f;
+            break;
+        case GAIN_X8:
+            pga_gain = LL_OPAMP_PGA_GAIN_8;
+            me.gain_factor = 8.f;
+            break;
+        case GAIN_X16:
+        default:
+            pga_gain = LL_OPAMP_PGA_GAIN_16;
+            me.gain_factor = 16.f;
+            break;
+        }
         LL_OPAMP_SetFunctionalMode(OPAMP2, LL_OPAMP_MODE_PGA);
         LL_OPAMP_SetInputInverting(OPAMP2, LL_OPAMP_INPUT_INVERT_CONNECT_NO);
-        LL_OPAMP_SetPGAGain(OPAMP2, opamp_pga_gain_from_current_gain(gain));
+        LL_OPAMP_SetPGAGain(OPAMP2, pga_gain);
     }
 
     LL_OPAMP_Enable(OPAMP2);
@@ -145,7 +158,7 @@ void adc_init(void)
     while (LL_ADC_IsCalibrationOnGoing(ADC2))
         ;
     cpu_halt(10);
-    
+
     LL_ADC_SetResolution(ADC2, LL_ADC_RESOLUTION_12B);
     LL_ADC_SetDataAlignment(ADC2, LL_ADC_DATA_ALIGN_RIGHT);
     LL_ADC_REG_SetTriggerSource(ADC2, LL_ADC_REG_TRIG_SOFTWARE);
@@ -182,7 +195,6 @@ int32_t adc_read_current(adc_cb_t cb, current_gain_t gain)
     me.busy = true;
     me.cb = cb;
     me.active = ADC_CURRENT;
-    me.opamp_gain = gain;
 
     opamp2_configure(gain);
     adc_prepare_single_conversion(LL_ADC_CHANNEL_3, LL_ADC_SINGLE_ENDED, LL_ADC_SAMPLINGTIME_181CYCLES_5);
@@ -204,7 +216,82 @@ int32_t adc_read_vdda(adc_cb_t cb)
     return 0;
 }
 
-float adc_convert_to_volt(adc_t adc, int32_t value)
+static void adc_cb_from_timer(int res, adc_t adc, int32_t raw, float value)
+{
+    if (me.cont.cb)
+    {
+        me.cont.cb(res, adc, raw, value);
+    }
+}
+
+static void cont_timer_cb(timer_t *t)
+{
+    if (!me.cont.active)
+        return;
+
+    if (me.cont.stop)
+    {
+        timer_stop(t);
+        adc_cb_t cb = me.cont.cb;
+        me.cont.active = false;
+        if (cb)
+        {
+            cb(-1, me.cont.adc, 0, 0.f);
+        }
+        return;
+    }
+
+    if (me.busy)
+    {
+        return;
+    }
+
+    me.busy = true;
+    me.cont.adc = (me.cont.adc == ADC_VOLTAGE) ? ADC_CURRENT : ADC_VOLTAGE;
+    me.cb = adc_cb_from_timer;
+    me.active = me.cont.adc;
+    if (me.cont.adc == ADC_CURRENT && me.opamp_gain != me.cont.gain_set)
+        opamp2_configure(me.cont.gain_set);
+    if (me.cont.adc == ADC_VOLTAGE)
+        adc_prepare_single_conversion(LL_ADC_CHANNEL_14, LL_ADC_DIFFERENTIAL_ENDED, LL_ADC_SAMPLINGTIME_181CYCLES_5);
+    else
+        adc_prepare_single_conversion(LL_ADC_CHANNEL_3, LL_ADC_SINGLE_ENDED, LL_ADC_SAMPLINGTIME_181CYCLES_5);
+    LL_ADC_REG_StartConversion(ADC2);
+}
+
+int32_t adc_read_continuous(adc_cb_t cb, tick_t delta)
+{
+    if (me.cont.active)
+        return -1;
+    me.cont.active = true;
+    me.cont.cb = cb;
+    timer_start(&me.cont.timer, cont_timer_cb, delta, TIMER_REPETITIVE);
+    return 0;
+}
+
+int32_t adc_stop_continuous(void)
+{
+    if (!me.cont.active)
+        return -1;
+    me.cont.stop = true;
+    return 0;
+}
+
+void adc_adjust_gain_continuous(current_gain_t gain)
+{
+    me.cont.gain_set = gain;
+}
+
+static int32_t adc_raw_adjust(adc_t adc, uint16_t raw)
+{
+    if (adc == ADC_VOLTAGE)
+        return (int32_t)raw - 2048;
+    else if (adc == ADC_VDDA)
+        return (int32_t)__LL_ADC_CALC_VREFANALOG_VOLTAGE(raw, LL_ADC_RESOLUTION_12B);
+    return (int32_t)raw;
+}
+
+static float adc_convert_to_volt(adc_t adc, int32_t value)
 {
     switch (adc)
     {
@@ -219,19 +306,6 @@ float adc_convert_to_volt(adc_t adc, int32_t value)
     }
 }
 
-static int32_t adc_value_from_result(uint16_t raw)
-{
-    if (me.active == ADC_VOLTAGE)
-    {
-        return (int32_t)raw - 2048;
-    }
-    if (me.active == ADC_VDDA)
-    {
-        return (int32_t)__LL_ADC_CALC_VREFANALOG_VOLTAGE(raw, LL_ADC_RESOLUTION_12B);
-    }
-    return (int32_t)raw;
-}
-
 void ADC1_2_IRQHandler(void);
 void ADC1_2_IRQHandler(void)
 {
@@ -240,28 +314,30 @@ void ADC1_2_IRQHandler(void)
 
     if (LL_ADC_IsActiveFlag_EOC(ADC2))
     {
-        const int32_t value = adc_value_from_result(LL_ADC_REG_ReadConversionData12(ADC2));
         LL_ADC_ClearFlag_EOC(ADC2);
-        if (me.active == ADC_VDDA)
-            me.vdda = (float)value / 1000.f;
+        const int32_t raw = adc_raw_adjust(me.active, LL_ADC_REG_ReadConversionData12(ADC2));
+        float volt = adc_convert_to_volt(me.active, raw);
+        float value = volt;
+        if (me.active == ADC_CURRENT)
+            value = volt / CURR_SENS_R / me.gain_factor;
         adc_cb_t cb = me.cb;
         me.busy = false;
         if (cb)
-            cb(me.active, value);
+            cb(0, me.active, raw, value);
     }
 }
 
-static void cli_adc_cb(adc_t adc, int32_t value)
+static void cli_adc_cb(int res, adc_t adc, int32_t raw, float value)
 {
     printf("\n");
-    float volts = adc_convert_to_volt(adc, value);
+    float volts = adc_convert_to_volt(adc, raw);
     switch (adc)
     {
     case ADC_VOLTAGE:
         printf("VOLT ");
         break;
     case ADC_CURRENT:
-        printf("CURR %smA ", ftostr(volts / CURR_SENS_R));
+        printf("CURR %smA ", value * 1000.f);
         break;
     case ADC_VDDA:
         printf("VDDA ");
@@ -270,7 +346,7 @@ static void cli_adc_cb(adc_t adc, int32_t value)
         printf("???? ");
         break;
     }
-    printf("%sV (%d)\n", ftostr(volts), value);
+    printf("%sV %d\n", ftostr(volts), raw);
 }
 
 static int cli_adc_read(int argc, const char **argv)
