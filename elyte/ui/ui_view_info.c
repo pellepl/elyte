@@ -59,10 +59,10 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     sprintf(str, "DAC   %d", info.dac);
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
-    sprintf(str, "CURR %dmA", (int32_t)info.current_avg * 1000);
+    sprintf(str, "CURR %s mA", ftostr1(info.current_avg * 1000.f));
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
-    sprintf(str, "VOLT %dmV", (int32_t)info.voltage_avg * 1000);
+    sprintf(str, "VOLT %s mV", ftostr1(info.voltage_avg * 1000.f));
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
 

@@ -50,6 +50,7 @@
 bool begins_with(const char *str, const char *prefix);
 float strtof(const char *s);
 const char *ftostr(float x);
+const char *ftostr1(float x);
 
 static inline uint32_t max_u32(uint32_t a, uint32_t b) { return a > b ? a : b; }
 static inline uint32_t min_u32(uint32_t a, uint32_t b) { return a < b ? a : b; }

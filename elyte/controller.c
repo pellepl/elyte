@@ -13,6 +13,9 @@
 #include "timer.h"
 #include "utils.h"
 
+#define MIN_DAC_VAL 640
+#define MAX_DAC_VAL 0xfff
+
 #define SAMPLE_DELTA_MS 10 // this will be divided by 2 as we're sampling V & C alternating
 #define AVG_BUF 8
 
@@ -39,6 +42,13 @@ static struct
     current_gain_t adc_current_gain;
     int32_t i_raw;
     int32_t v_raw;
+    uint16_t dac;
+    struct
+    {
+        bool enabled;
+        float curr;
+        float volt;
+    } set;
 } me;
 
 static void avg_buffer_add(avg_buffer_t *b, float v)
@@ -83,6 +93,91 @@ static void adc_current_gain_decrease(void)
     adc_adjust_gain_continuous(me.adc_current_gain);
 }
 
+static void adjust_dac(void)
+{
+    bool i_maxed_reading = me.i_raw > (int)(0.99f * ADC_RAW_MAX_VAL);
+    if ((me.adc_current_gain == GAIN_MIN && i_maxed_reading) || me.set.curr == 0 || me.set.volt == 0)
+    {
+        // current maxed => shorted, hold off instantly
+        ctrl_set_dac(0);
+        return;
+    }
+
+    int32_t dac = (int32_t)me.dac;
+    float v_avg = avg_buffer_get_avg(&me.voltage);
+    float i_avg = avg_buffer_get_avg(&me.current);
+    float v_cur = avg_buffer_get_last(&me.voltage);
+    float i_cur = avg_buffer_get_last(&me.current);
+    float dv_avg = me.set.volt - v_avg;
+    float dv_cur = me.set.volt - v_cur;
+    float di_avg = me.set.curr - i_avg;
+    float di_cur = me.set.curr - i_cur;
+    const float EPS = 0.0005f;
+    if (abs_f(dv_cur) < EPS)
+        dv_cur = 0.f;
+    if (abs_f(dv_avg) < EPS)
+        dv_avg = 0.f;
+    if (abs_f(di_cur) < EPS)
+        di_cur = 0.f;
+    if (abs_f(di_avg) < EPS)
+        di_avg = 0.f;
+
+    if (v_avg <= EPS && i_avg >= 0 && dac > MIN_DAC_VAL)
+    {
+        // zero voltage, but current => shorted, hold off instantly
+        // ctrl_set_dac(0);
+        // return;
+    }
+
+    if (dv_cur < -0.350f)
+    {
+        // instant voltage reading >= 0.35V too high, react instantly
+        dac /= 2;
+    }
+    else if (dv_avg < -0.100f)
+    {
+        // instant voltage reading >= 0.1V too high, react instantly
+        dac -= 20;
+    }
+    else if (di_cur < -0.100f)
+    {
+        // instant current reading >= 0.1A too high, react instantly
+        dac = dac * 3 / 4;
+    }
+    else if (dv_avg < 0)
+    {
+        // average voltage too high, lower DAC slowly
+        dac--;
+    }
+    else if (di_avg < -0.05f)
+    {
+        // average current too high, lower DAC slowly
+        dac -= 10;
+    }
+    else if (di_avg < 0)
+    {
+        // average current too high, lower DAC slowly
+        dac--;
+    }
+    else if (di_avg > 0.05f)
+    {
+        // average current much too low, raise DAC quickly
+        dac += 25;
+    }
+    else if (di_avg > 0.005f)
+    {
+        // average current pretty low, raise DAC quicklyish
+        dac += 10;
+    }
+    else if (di_avg > 0)
+    {
+        // average current too low, raise DAC slowly
+        dac++;
+    }
+    dac = clamp_i32(MIN_DAC_VAL, dac, MAX_DAC_VAL);
+    ctrl_set_dac((uint16_t)dac);
+}
+
 static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
 {
     if (res)
@@ -93,23 +188,20 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
         me.v_raw = raw;
         avg_buffer_add(&me.voltage, val);
         break;
+
     case ADC_CURRENT:
     {
         me.i_raw = raw;
-        bool maxed_reading = raw > (int)(0.99f * ADC_RAW_MAX_VAL);
-        if (me.adc_current_gain == GAIN_MIN && maxed_reading)
-        {
-            // current maxed, hold off instantly
-            ctrl_set_dac(0);
-        }
-        if (!maxed_reading)
-            avg_buffer_add(&me.current, val);
+        avg_buffer_add(&me.current, val);
         if (raw < ADC_RAW_MAX_VAL / 3)
             adc_current_gain_increase();
         else if (raw > 3 * ADC_RAW_MAX_VAL / 4)
             adc_current_gain_decrease();
+        if (me.set.enabled)
+            adjust_dac();
     }
     break;
+
     case ADC_VDDA:
         printf("VDDA %s %d\n", ftostr(val), raw);
         break;
@@ -154,6 +246,16 @@ bool ctrl_is_panicking(void)
 void ctrl_set_dac(uint16_t dac)
 {
     dac_set(dac);
+    me.dac = dac;
+    me.info.dac = dac;
+    event_add(&me.ev_status, EVENT_STATUS, &me.info);
+}
+
+void ctrl_force_dac(uint16_t dac)
+{
+    me.set.enabled = false;
+    dac_set(dac);
+    me.dac = dac;
     me.info.dac = dac;
     event_add(&me.ev_status, EVENT_STATUS, &me.info);
 }
@@ -167,6 +269,27 @@ const status_info_t *ctrl_request_status(void)
     return &me.info;
 }
 
+void ctrl_set_current_ma(int32_t curr)
+{
+    me.set.curr = (float)curr / 1000.f;
+    me.set.enabled = true;
+}
+
+int32_t ctrl_get_current_ma(void)
+{
+    return (int32_t)(me.set.curr * 1000.f);
+}
+
+void ctrl_set_voltage_mv(int32_t volt)
+{
+    me.set.volt = (float)volt / 1000.f;
+    me.set.enabled = true;
+}
+int32_t ctrl_get_voltage_mv(void)
+{
+    return (int32_t)(me.set.volt * 1000.f);
+}
+
 static void ctrl_event_handler(uint32_t type, void *arg)
 {
     switch (type)
@@ -175,7 +298,7 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     {
         float v_avg = avg_buffer_get_avg(&me.voltage);
         float i_avg = avg_buffer_get_avg(&me.current);
-        printf("V:%s %d I:%s %d x%d\n", ftostr(v_avg), me.v_raw, ftostr(i_avg), me.i_raw, (1 << me.adc_current_gain));
+        printf("V:%s %d I:%s %d x%d\tDAC:%d\n", ftostr(v_avg), me.v_raw, ftostr(i_avg), me.i_raw, (1 << me.adc_current_gain), me.dac);
         if (v_avg != me.info.voltage_avg || i_avg != me.info.current_avg)
         {
             me.info.voltage_avg = v_avg;
