@@ -10,6 +10,7 @@ typedef struct {
     float voltage_avg;
     float current_cur;
     float voltage_cur;
+    uint16_t holdoff;
 } status_info_t;
 
 void ctrl_init(void);

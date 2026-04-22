@@ -33,7 +33,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         ui_trigger_update();
         break;
     case EVENT_STATUS:
-        info = *((status_info_t *)arg);
+        info = *ctrl_request_status();
         ui_trigger_update();
         break;
     default:
@@ -57,6 +57,9 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
     sprintf(str, "DAC   %d", info.dac);
+    gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
+    NL;
+    sprintf(str, "Holdoff %d", info.holdoff);
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
     sprintf(str, "CURR %s mA", ftostr1(info.current_avg * 1000.f));

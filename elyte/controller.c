@@ -31,6 +31,14 @@ typedef struct
     volatile float last;
 } avg_buffer_t;
 
+typedef enum
+{
+    V_DEC,
+    I_DEC,
+    V_INC,
+    I_INC,
+} dac_last_op_t;
+
 static struct
 {
     volatile bool panic;
@@ -43,12 +51,14 @@ static struct
     int32_t i_raw;
     int32_t v_raw;
     uint16_t dac;
+    volatile uint16_t holdoff;
     struct
     {
         bool enabled;
         float curr;
         float volt;
     } set;
+    dac_last_op_t dac_last_op;
 } me;
 
 static void avg_buffer_add(avg_buffer_t *b, float v)
@@ -96,12 +106,22 @@ static void adc_current_gain_decrease(void)
 static void adjust_dac(void)
 {
     bool i_maxed_reading = me.i_raw > (int)(0.99f * ADC_RAW_MAX_VAL);
-    if ((me.adc_current_gain == GAIN_MIN && i_maxed_reading) || me.set.curr == 0 || me.set.volt == 0)
+    if (me.adc_current_gain == GAIN_MIN && i_maxed_reading)
     {
         // current maxed => shorted, hold off instantly
+        me.holdoff = 3;
+        printf("SHORT\n");
         ctrl_set_dac(0);
         return;
     }
+
+    if (me.holdoff > 0)
+        return;
+
+    if (me.set.curr == 0 || me.set.volt == 0)
+        return;
+
+    dac_last_op_t last_op = me.dac_last_op;
 
     int32_t dac = (int32_t)me.dac;
     float v_avg = avg_buffer_get_avg(&me.voltage);
@@ -122,57 +142,68 @@ static void adjust_dac(void)
     if (abs_f(di_avg) < EPS)
         di_avg = 0.f;
 
-    if (v_avg <= EPS && i_avg >= 0 && dac > MIN_DAC_VAL)
+    if (v_avg <= EPS && i_avg >= 0.003f && dac > MIN_DAC_VAL)
     {
         // zero voltage, but current => shorted, hold off instantly
-        // ctrl_set_dac(0);
-        // return;
+        me.holdoff = 3;
+        printf("SHORT\n");
+        ctrl_set_dac(0);
+        return;
     }
 
     if (dv_cur < -0.350f)
     {
         // instant voltage reading >= 0.35V too high, react instantly
         dac /= 2;
+        me.dac_last_op = V_DEC;
     }
     else if (dv_avg < -0.100f)
     {
         // instant voltage reading >= 0.1V too high, react instantly
         dac -= 20;
+        me.dac_last_op = V_DEC;
     }
     else if (di_cur < -0.100f)
     {
         // instant current reading >= 0.1A too high, react instantly
         dac = dac * 3 / 4;
+        me.dac_last_op = I_DEC;
     }
     else if (dv_avg < 0)
     {
         // average voltage too high, lower DAC slowly
         dac--;
+        me.dac_last_op = V_DEC;
     }
     else if (di_avg < -0.05f)
     {
         // average current too high, lower DAC slowly
         dac -= 10;
+        me.dac_last_op = I_DEC;
     }
     else if (di_avg < 0)
     {
         // average current too high, lower DAC slowly
         dac--;
+        me.dac_last_op = I_DEC;
     }
     else if (di_avg > 0.05f)
     {
-        // average current much too low, raise DAC quickly
-        dac += 25;
+        // average current much too low, raise DAC quickly (unless we just capped voltage)
+        dac += last_op == V_DEC ? 1 : 25;
+        me.dac_last_op = last_op == V_DEC ? V_DEC: I_INC;
     }
     else if (di_avg > 0.005f)
     {
         // average current pretty low, raise DAC quicklyish
-        dac += 10;
+        dac += last_op == V_DEC ? 1 : 10;
+        me.dac_last_op = last_op == V_DEC ? V_DEC: I_INC;
     }
     else if (di_avg > 0)
     {
         // average current too low, raise DAC slowly
         dac++;
+        me.dac_last_op = I_INC;
     }
     dac = clamp_i32(MIN_DAC_VAL, dac, MAX_DAC_VAL);
     ctrl_set_dac((uint16_t)dac);
@@ -266,6 +297,7 @@ const status_info_t *ctrl_request_status(void)
     me.info.current_avg = avg_buffer_get_avg(&me.current);
     me.info.voltage_cur = avg_buffer_get_last(&me.voltage);
     me.info.current_cur = avg_buffer_get_last(&me.current);
+    me.info.holdoff = me.holdoff;
     return &me.info;
 }
 
@@ -307,6 +339,11 @@ static void ctrl_event_handler(uint32_t type, void *arg)
             me.info.current_cur = avg_buffer_get_last(&me.current);
 
             event_add(&me.ev_status, EVENT_STATUS, &me.info);
+        }
+        if (me.holdoff)
+        {
+            me.holdoff--;
+            ctrl_set_dac(0);
         }
     }
     break;

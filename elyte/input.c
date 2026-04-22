@@ -194,7 +194,7 @@ static void event_handler(uint32_t type, void *arg)
         {
             if (!input_is_button_pressed(but) ||
                 (now_s - me.button_press_s[but] < INPUT_LONG_PRESS_SEC) ||
-                (me.button_during_rotation_mask & (1 << but) != 0))
+                ((me.button_during_rotation_mask & (1 << but)) != 0))
                 continue;
             me.button_longpress_mask |= (1 << but);
             event_add(&me.ev_button, EVENT_UI_PRESSHOLD, (void *)but);

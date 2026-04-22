@@ -13,6 +13,10 @@
 #define __hex(z) 0x##z
 #define ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
+#ifndef BUILD_RELEASE
+#define BUILD_RELEASE 0
+#endif
+
 #define ASSERT(x)                                                   \
     do                                                              \
     {                                                               \
