@@ -159,7 +159,12 @@ static void ui_disp_update(void)
     }
     me.next_paint_update = paint_update;
     me.ongoing_disp_command = true;
-    disp_screen_update(disp_update_done_cb);
+    if (!disp_screen_update(disp_update_done_cb))
+    {
+        me.ongoing_disp_command = false;
+        me.pending_disp_command = true;
+        timer_start(&me.timer_repaint, repaint_timer_cb, TIMER_MS_TO_TICKS(10), TIMER_ONESHOT);
+    }
 }
 
 void ui_trigger_update(void)

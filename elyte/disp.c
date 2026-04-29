@@ -247,7 +247,6 @@ void DMA1_Channel6_IRQHandler(void)
 
         if (me.done_cb)
             me.done_cb(-1);
-
         return;
     }
 

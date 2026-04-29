@@ -16,7 +16,6 @@ static struct {
 void dac_init(void)
 {
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_DAC1);
-    gpio_config(PIN_DAC, GPIO_DIRECTION_ANALOG, GPIO_PULL_NONE);
 
     LL_DAC_Disable(DAC1, LL_DAC_CHANNEL_1);
     LL_DAC_DisableDMAReq(DAC1, LL_DAC_CHANNEL_1);
@@ -27,6 +26,8 @@ void dac_init(void)
     me.dac_val = 0;
     LL_DAC_ConvertData12RightAligned(DAC1, LL_DAC_CHANNEL_1, me.dac_val);
     LL_DAC_Enable(DAC1, LL_DAC_CHANNEL_1);
+
+    gpio_config(PIN_DAC, GPIO_DIRECTION_ANALOG, GPIO_PULL_NONE);
 }
 
 void dac_set(uint32_t dac)

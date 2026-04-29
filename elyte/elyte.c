@@ -68,6 +68,9 @@ static void uart_setup(void)
         .stopbits = UART_STOPBITS_1,
         .flowcontrol = UART_FLOWCONTROL_NONE};
     uart_deinit(UART_STD);
+    NVIC_SetPriority(USART1_IRQn, 5);
+    NVIC_SetPriority(USART2_IRQn, 5);
+    NVIC_SetPriority(USART3_IRQn, 5);
     uart_init(UART_STD, &cfg);
 }
 
@@ -100,6 +103,7 @@ int main(void)
     cpu_init();
     noinit_init();
     board_init();
+    NVIC_SetPriorityGrouping(/*NVIC_PRIORITYGROUP_4*/3);
     gpio_init();
     gpio_setup();
     dac_init();
@@ -112,17 +116,18 @@ int main(void)
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
     adc_init();
-    gpio_set(PIN_LED_G, 1);
 
     event_init(event_handler);
-    input_init();
-    second_init();
-    ctrl_init();
     disp_init();
-    disp_set_enabled(true, NULL);
+    disp_set_enabled(false, NULL);
     gfx_init();
     ui_init();
     ui_trigger_update();
+    input_init();
+    second_init();
+    disp_set_enabled(true, NULL);
+    ctrl_init();
+    gpio_set(PIN_LED_G, 1);
 
     while (1)
     {
@@ -206,7 +211,8 @@ static int cli_dbg_show(int argc, const char **argv)
         printf("BAD MAGIC\n");
     printf("reset count:    %d\n", n->reset_count);
     printf("hardfault count: %d (last %d)\n", n->hardfault_count, n->hardfault_count_last);
-    for (size_t i = 0; i < sizeof(n->entries); i++) {
+    for (size_t i = 0; i < sizeof(n->entries); i++)
+    {
         if (n->entries[i] == 0 && n->exits[i] == 0)
             continue;
         printf("entry/exit %02d: %d/%d\n", i, n->entries[i], n->exits[i]);
