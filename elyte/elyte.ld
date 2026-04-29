@@ -1,5 +1,12 @@
 SECTIONS {
 
+.noinit (NOLOAD) : {
+    . = ALIGN(4);
+    __noinit_start = .;
+    KEEP(*(.noinit*))
+    __noinit_end = .;
+} > RAM
+
 .nobss : {
     . = ALIGN(4);
     __nobss_start = .;
