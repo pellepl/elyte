@@ -4,6 +4,8 @@
 #include "minio.h"
 #include "utils.h"
 
+static volatile noinit_t _noinit __attribute__((section(".noinit")));
+
 float strtof(const char *s)
 {
     const char *comma = strstr(s, ".");
@@ -87,4 +89,8 @@ bool begins_with(const char *str, const char *prefix)
             break;
     }
     return false;
+}
+
+volatile noinit_t *noinit(void) {
+    return &_noinit;
 }

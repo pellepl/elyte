@@ -18,6 +18,8 @@
 #include "ui.h"
 #include "utils.h"
 
+#define NOINIT_MAGIC 0xfeedc0ca
+
 static struct
 {
     uint8_t rx_buf[32];
@@ -30,6 +32,9 @@ static void cli_cb(const char *func_name, int res);
 void uart_irq_rxchar_stm32f3(int handle, char c);
 void uart_irq_rxchar_stm32f3(int handle, char c)
 {
+    (void)handle;
+    if (me.cli_rx_rb.buffer == NULL || me.cli_rx_rb.max_len == 0)
+        return;
     ringbuffer_putc(&me.cli_rx_rb, (uint8_t)c);
 }
 
@@ -78,23 +83,37 @@ static void event_handler(uint32_t event, void *arg)
     }
 }
 
+static void noinit_init(void)
+{
+    volatile noinit_t *n = noinit();
+    if (n->magic != NOINIT_MAGIC)
+    {
+        memset((volatile void *)n, 0, sizeof(noinit_t));
+        n->magic = NOINIT_MAGIC;
+        n->reset_count = 0;
+    }
+    n->reset_count++;
+}
+
 int main(void)
 {
     cpu_init();
+    noinit_init();
     board_init();
     gpio_init();
     gpio_setup();
     dac_init();
+    gpio_set(PIN_LED_R, 1);
+    ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     uart_setup();
     printf("\n" stringify(BUILD_INFO_TARGET_NAME) "\n");
     printf(stringify(BUILD_INFO_GIT_COMMIT) "@" stringify(BUILD_INFO_HOST_WHO) " " stringify(BUILD_INFO_HOST_WHEN_DATE) " " stringify(BUILD_INFO_HOST_WHEN_TIME) "\n");
-    gpio_set(PIN_LED_G, 1);
-    gpio_set(PIN_LED_R, 1);
     timer_init();
-    ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
     adc_init();
+    gpio_set(PIN_LED_G, 1);
+
     event_init(event_handler);
     input_init();
     second_init();
@@ -172,6 +191,35 @@ static int cli_reset(int argc, const char **argv)
 }
 CLI_FUNCTION(cli_reset, "reset", ": reset");
 
+static int cli_dbg_reset(int argc, const char **argv)
+{
+    volatile noinit_t *n = noinit();
+    n->magic = 0;
+    return 0;
+}
+CLI_FUNCTION(cli_dbg_reset, "dbg_reset", ": reset dbg info");
+
+static int cli_dbg_show(int argc, const char **argv)
+{
+    volatile noinit_t *n = noinit();
+    if (n->magic != NOINIT_MAGIC)
+        printf("BAD MAGIC\n");
+    printf("reset count:    %d\n", n->reset_count);
+    printf("hardfault count: %d (last %d)\n", n->hardfault_count, n->hardfault_count_last);
+    for (size_t i = 0; i < sizeof(n->entries); i++) {
+        if (n->entries[i] == 0 && n->exits[i] == 0)
+            continue;
+        printf("entry/exit %02d: %d/%d\n", i, n->entries[i], n->exits[i]);
+    }
+    if (n->irq_trap_count > 0)
+    {
+        printf("irq_trap: count=%d ipsr=%d\n", n->irq_trap_count, n->irq_trap_last_ipsr);
+    }
+    n->hardfault_count_last = n->hardfault_count;
+    return 0;
+}
+CLI_FUNCTION(cli_dbg_show, "dbg_show", ": show dbg info");
+
 static void cli_cb(const char *func_name, int res)
 {
     switch (res)
@@ -195,4 +243,15 @@ static void cli_cb(const char *func_name, int res)
         printf("ERROR (%d)\n", res);
         break;
     }
+}
+
+void HardFault_Handler(void);
+void HardFault_Handler(void)
+{
+    volatile noinit_t *n = noinit();
+    n->hardfault_count++;
+    cpu_interrupt_disable();
+    printf("\nHARDFAULT\n");
+    while (1)
+        ;
 }

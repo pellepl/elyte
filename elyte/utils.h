@@ -17,6 +17,7 @@
 #define BUILD_RELEASE 0
 #endif
 
+
 #define ASSERT(x)                                                   \
     do                                                              \
     {                                                               \
@@ -50,6 +51,17 @@
         printf(__VA_ARGS__); \
     } while (0)
 #endif
+
+typedef struct {
+    uint32_t magic;
+    uint32_t reset_count;
+    uint32_t hardfault_count;
+    uint32_t hardfault_count_last;
+    uint8_t entries[32];
+    uint8_t exits[32];
+    uint32_t irq_trap_count;
+    uint32_t irq_trap_last_ipsr;
+} noinit_t;
 
 bool begins_with(const char *str, const char *prefix);
 float strtof(const char *s);
@@ -108,3 +120,4 @@ static inline uint32_t clz32(uint32_t x)
 
     return n;
 }
+volatile noinit_t *noinit(void);
