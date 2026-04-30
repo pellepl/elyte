@@ -21,6 +21,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         ui_goto_view(&view_menu, true);
         ui_trigger_update();
         break;
+
     case EVENT_UI_SCRL:
         if ((int)arg < 0)
         {
@@ -32,10 +33,12 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         }
         ui_trigger_update();
         break;
+
     case EVENT_STATUS:
-        info = *ctrl_request_status();
+        info = *((status_info_t *)arg);
         ui_trigger_update();
         break;
+
     default:
         break;
     }

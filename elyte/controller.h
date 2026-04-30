@@ -3,6 +3,14 @@
 #include <stdbool.h>
 #include "bmtypes.h"
 
+typedef enum
+{
+    IDLE,
+    V_DEC,
+    I_DEC,
+    V_INC,
+    I_INC,
+} dac_op_t;
 
 typedef struct {
     uint16_t dac;
@@ -11,6 +19,10 @@ typedef struct {
     float current_cur;
     float voltage_cur;
     uint16_t holdoff;
+    dac_op_t dac_op;
+    dac_op_t dac_op_dec;
+    uint32_t dac_op_count;
+    uint32_t dac_op_dec_count;
 } status_info_t;
 
 void ctrl_init(void);
@@ -25,4 +37,4 @@ void ctrl_set_voltage_mv(int32_t volt);
 int32_t ctrl_get_voltage_mv(void);
 void ctrl_set_dac(uint16_t dac);
 void ctrl_force_dac(uint16_t dac);
-const status_info_t *ctrl_request_status(void);
+void ctrl_request_status(status_info_t *dst);

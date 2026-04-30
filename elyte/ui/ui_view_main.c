@@ -44,7 +44,7 @@ static void init(const ui_view_t *this)
 
 static void enter(const ui_view_t *this)
 {
-    me.info = *ctrl_request_status();
+    ctrl_request_status(&me.info);
     me.adjust = NONE;
 }
 
@@ -71,6 +71,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         }
         ui_trigger_update();
         break;
+
     case EVENT_UI_CLICK:
         me.last_mod_s = now_s;
         if (me.ui.show_dac)
@@ -85,7 +86,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         }
         else if (me.adjust == SELECT_CURRENT || me.adjust == SELECT_VOLTAGE)
         {
-            
+
             me.adjust = me.adjust == SELECT_VOLTAGE ? ADJUST_VOLTAGE : ADJUST_CURRENT;
             me.ui.select_size = 0;
         }
@@ -99,6 +100,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         }
         ui_trigger_update();
         break;
+
     case EVENT_UI_SCRL:
         me.last_mod_s = now_s;
         if (input_is_button_pressed(INPUT_BUTTON_ROTARY))
@@ -133,7 +135,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
 
     case EVENT_STATUS:
         me.info = *((status_info_t *)arg);
-        if (me.info.dac == 0) 
+        if (me.info.dac == 0)
             me.info.voltage_avg = 0.f;
         ui_trigger_update();
         break;
@@ -147,6 +149,8 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         }
         if (me.ui.show_dac)
             me.ui.show_dac = now_s - me.show_dac_s <= 5;
+        break;
+
     default:
         break;
     }
@@ -177,6 +181,11 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
         uint32_t setting = i ? me.ui.i_ma : me.ui.v_mv;
         bool select = i ? me.adjust == SELECT_CURRENT : me.adjust == SELECT_VOLTAGE;
         bool adjust = i ? me.adjust == ADJUST_CURRENT : me.adjust == ADJUST_VOLTAGE;
+        bool limit = false;
+        if (me.info.dac_op_count - me.info.dac_op_dec_count < 1000) {
+            // last dac decrease less than 1000 dac adjustments ago, show limit marker
+            limit = (i != 0 && me.info.dac_op_dec == I_DEC) || (i == 0 && me.info.dac_op_dec == V_DEC);
+        }
         if (adjust)
         {
             sprintf(str, "%d", setting);
@@ -186,8 +195,8 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
             else
                 sprintf(str, "%d", value);
             str_w = gfx_string_width(UI_FONT_MINI, str);
-            gfx_string(ctx, UI_FONT_MINI, str, DISP_W - unit_w - str_w, 
-                y + UI_FONT_HUGE->max_height - UI_FONT_MINI->max_height - 4, GFX_COL_SET);
+            gfx_string(ctx, UI_FONT_MINI, str, DISP_W - unit_w - str_w,
+                       y + UI_FONT_HUGE->max_height - UI_FONT_MINI->max_height - 4, GFX_COL_SET);
         }
         else if (select)
         {
@@ -212,6 +221,12 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
 
         gfx_string(ctx, UI_FONT_MINI, unit_str, DISP_W - unit_w,
                    y + UI_FONT_HUGE->max_height - UI_FONT_MINI->max_height - 4, GFX_COL_SET);
+        if (limit)
+        {
+            gfx_area_t limit_area = {
+                .x0 = DISP_W - 10, .y0 = y + 2, .x1 = DISP_W - 2, .y1 = y + 10};
+            gfx_fill(ctx, &limit_area, GFX_COL_SET);
+        }
     }
 
     int select_size_target = 0;
