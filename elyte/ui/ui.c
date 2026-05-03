@@ -323,6 +323,7 @@ static void ui_event(uint32_t type, void *arg)
     {
 #define FACTOR 24
         int scroll = (int)arg;
+        scroll = clamp_i32(-1, scroll, 1);
         tick_t now = timer_now();
         tick_t dt = (tick_t)sqrtf(now - me.last_scroll_t);
         if (sign_i32(scroll) != sign_i32(me.last_scroll))
@@ -332,6 +333,7 @@ static void ui_event(uint32_t type, void *arg)
         else
             me.abs_scroll_int = me.abs_scroll_int * FACTOR / dt;
         me.abs_scroll_int += abs_i32(scroll);
+        //printf("abs_scroll_int %d\n", me.abs_scroll_int);
         me.last_scroll = scroll;
         me.last_scroll_t = now;
     }
