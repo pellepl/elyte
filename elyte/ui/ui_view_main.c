@@ -27,12 +27,10 @@ static struct
         int select_size;
         int32_t i_ma;
         int32_t v_mv;
-        bool show_dac;
     } ui;
 
     status_info_t info;
     uint32_t last_mod_s;
-    uint32_t show_dac_s;
     int dac;
 } me;
 
@@ -74,8 +72,6 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
 
     case EVENT_UI_CLICK:
         me.last_mod_s = now_s;
-        if (me.ui.show_dac)
-            me.ui.show_dac = false;
         else if (me.adjust == NONE)
         {
             me.adjust = SELECT_CURRENT;
@@ -103,15 +99,6 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
 
     case EVENT_UI_SCRL:
         me.last_mod_s = now_s;
-        if (input_is_button_pressed(INPUT_BUTTON_ROTARY))
-        {
-            me.dac -= ((int)arg);
-            me.dac = clamp_i32(0, me.dac, 0xfff);
-            ctrl_force_dac(me.dac);
-            me.show_dac_s = now_s;
-            me.ui.show_dac = true;
-            return;
-        }
         if (me.adjust == NONE || me.adjust == SELECT_CURRENT || me.adjust == SELECT_VOLTAGE)
         {
             me.adjust = (int)arg < 0 ? SELECT_VOLTAGE : SELECT_CURRENT;
@@ -147,8 +134,6 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
             me.adjust = NONE;
             ui_trigger_update();
         }
-        if (me.ui.show_dac)
-            me.ui.show_dac = now_s - me.show_dac_s <= 5;
         break;
 
     default:
@@ -163,15 +148,6 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     char str[32];
 
     const int unit_w = 18;
-
-    if (me.ui.show_dac)
-    {
-        sprintf(str, "%d", me.dac);
-        str_w = gfx_string_width(UI_FONT_HUGE, str);
-        gfx_string(ctx, UI_FONT_HUGE, str, (DISP_W - str_w) / 2, DISP_H / 4, GFX_COL_SET);
-
-        return t;
-    }
 
     for (int i = 0; i < 2; i++)
     {

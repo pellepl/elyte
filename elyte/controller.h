@@ -36,5 +36,4 @@ int32_t ctrl_get_current_ma(void);
 void ctrl_set_voltage_mv(int32_t volt);
 int32_t ctrl_get_voltage_mv(void);
 void ctrl_set_dac(uint16_t dac);
-void ctrl_force_dac(uint16_t dac);
 void ctrl_request_status(status_info_t *dst);

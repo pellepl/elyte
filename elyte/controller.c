@@ -33,6 +33,7 @@ typedef struct
 static struct
 {
     volatile bool panic;
+    volatile bool enabled;
     event_t ev_panic;
     event_t ev_status;
     status_info_t info;
@@ -91,6 +92,8 @@ static void adc_current_gain_decrease(void)
 
 static void adjust_dac(void)
 {
+    if (!me.enabled)
+        return;
     bool i_maxed_reading = me.i_raw > (int)(0.99f * ADC_RAW_MAX_VAL);
     if (me.adc_current_gain == GAIN_MIN && i_maxed_reading)
     {
@@ -230,8 +233,6 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
             adc_current_gain_increase();
         else if (raw > 3 * ADC_RAW_MAX_VAL / 4)
             adc_current_gain_decrease();
-        if (me.set.enabled)
-            adjust_dac();
     }
     break;
 
@@ -243,16 +244,19 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
 
 void ctrl_start(void)
 {
+    me.enabled = true;
 }
 
 void ctrl_stop(void)
 {
+    me.enabled = false;
 }
 
 void ctrl_init(void)
 {
     int res;
     me.adc_current_gain = GAIN_MIN;
+    me.enabled = true;
     adc_adjust_gain_continuous(me.adc_current_gain);
     res = adc_read_vdda(ctrl_adc_cb);
     if (res)
@@ -278,15 +282,6 @@ bool ctrl_is_panicking(void)
 
 void ctrl_set_dac(uint16_t dac)
 {
-    dac_set(dac);
-    me.dac = dac;
-    me.info.dac = dac;
-    event_add(&me.ev_status, EVENT_STATUS, &me.info);
-}
-
-void ctrl_force_dac(uint16_t dac)
-{
-    me.set.enabled = false;
     dac_set(dac);
     me.dac = dac;
     me.info.dac = dac;
