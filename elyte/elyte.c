@@ -11,6 +11,7 @@
 #include "gpio_driver.h"
 #include "input.h"
 #include "minio.h"
+#include "pwm.h"
 #include "ringbuffer.h"
 #include "second.h"
 #include "timer.h"
@@ -107,6 +108,7 @@ int main(void)
     gpio_init();
     gpio_setup();
     dac_init();
+    pwm_init();
     gpio_set(PIN_LED_R, 1);
     ringbuffer_init(&me.cli_rx_rb, me.rx_buf, sizeof(me.rx_buf));
     uart_setup();
