@@ -10,16 +10,19 @@
 #define Y_VOLTAGE 0
 #define Y_CURRENT (DISP_H / 2)
 
+typedef enum
+{
+    NONE,
+    SELECT_VOLTAGE,
+    SELECT_CURRENT,
+    ADJUST_VOLTAGE,
+    ADJUST_CURRENT,
+} main_state_t;
 static struct
 {
-    enum
-    {
-        NONE,
-        SELECT_VOLTAGE,
-        SELECT_CURRENT,
-        ADJUST_VOLTAGE,
-        ADJUST_CURRENT,
-    } adjust;
+    main_state_t adjust;
+    main_state_t adjust_last_select;
+
     struct
     {
         int select_y;
@@ -72,9 +75,9 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
 
     case EVENT_UI_CLICK:
         me.last_mod_s = now_s;
-        else if (me.adjust == NONE)
+        if (me.adjust == NONE)
         {
-            me.adjust = SELECT_CURRENT;
+            me.adjust = me.adjust_last_select == NONE ? SELECT_CURRENT : me.adjust_last_select;
             me.ui.select_size = 0;
             me.ui.select_y = me.ui.select_y_target = Y_CURRENT;
             me.ui.i_ma = ctrl_get_current_ma();
@@ -139,6 +142,9 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
     default:
         break;
     }
+    if (me.adjust == SELECT_CURRENT || me.adjust == SELECT_VOLTAGE) {
+        me.adjust_last_select = me.adjust;
+    }
 }
 
 static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
@@ -158,7 +164,8 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
         bool select = i ? me.adjust == SELECT_CURRENT : me.adjust == SELECT_VOLTAGE;
         bool adjust = i ? me.adjust == ADJUST_CURRENT : me.adjust == ADJUST_VOLTAGE;
         bool limit = false;
-        if (me.info.dac_op_count - me.info.dac_op_dec_count < 1000) {
+        if (me.info.dac_op_count - me.info.dac_op_dec_count < 1000)
+        {
             // last dac decrease less than 1000 dac adjustments ago, show limit marker
             limit = (i != 0 && me.info.dac_op_dec == I_DEC) || (i == 0 && me.info.dac_op_dec == V_DEC);
         }
