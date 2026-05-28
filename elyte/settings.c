@@ -1,15 +1,107 @@
-#include <errno.h>
-#include <stddef.h>
-#include <stdint.h>
 #include "cli.h"
 #include "flash_driver.h"
 #include "minio.h"
 #include "nvmtnvj.h"
+#include "settings.h"
 #include "utils.h"
 
 #define NVMTNVJ_BLOCKS 3
 #define NVMTNVJ_SECTORS_PER_BLOCK 2
 #define NVMTNVJ_TAG_SIZE 12
+
+const setting_def_t defs[] = {
+    {.id = SETTING_SCREEN_ALIVE_S,
+     .name = "Screen alive",
+     .unit = "s",
+     .def = 60,
+     .max = 3600,
+     .min = 5,
+     .e = 0,
+     .tag = 1},
+    {.id = SETTING_CURR_CYCLE_PERIOD_S,
+     .name = "Current cycle period",
+     .unit = "s",
+     .def = 0,
+     .max = 300,
+     .min = 0,
+     .e = 0,
+     .tag = 2},
+    {.id = SETTING_CURR_CYCLE_DUTY_S,
+     .name = "Current cycle duty",
+     .unit = "s",
+     .def = 0,
+     .max = 300,
+     .min = 0,
+     .e = 0,
+     .tag = 3},
+    {.id = SETTING_CURR_CYCLE_LIMIT_MV,
+     .name = "Current cycle limit",
+     .unit = "mV",
+     .def = 0,
+     .max = 2500,
+     .min = 0,
+     .e = 0,
+     .tag = 4},
+    {.id = SETTING_SERVO_DELTA_S,
+     .name = "Servo period",
+     .unit = "s",
+     .def = 0,
+     .max = 300,
+     .min = 0,
+     .e = 0,
+     .tag = 5},
+};
+
+static struct
+{
+    int32_t setting_vals[SETTING_COUNT];
+} me;
+
+setting_t *setting_get(setting_id_t id, setting_t *s)
+{
+    if (id >= SETTING_COUNT)
+        return NULL;
+    for (setting_id_t i = 0; i < SETTING_COUNT; i++)
+    {
+        if (defs[i].id == id)
+        {
+            s->def = &defs[i];
+            break;
+        }
+    }
+    s->value = me.setting_vals[id];
+    return s;
+}
+
+void settings_init(void)
+{
+    for (size_t i = 0; i < ARRAY_LEN(defs); i++)
+    {
+        const setting_def_t *def = &defs[i];
+        if (def->tag == 0)
+        {
+            me.setting_vals[def->id] = def->def;
+            continue;
+        }
+        uint8_t data[NVMTNVJ_TAG_SIZE];
+        int res = nvmtnvj_read(def->tag, data);
+        if (res == ERR_NVMTNVJ_NOENT)
+        {
+            me.setting_vals[def->id] = def->def;
+            continue;
+        }
+        else if (res < 0)
+        {
+            printf("ERROR: settings init %d\n", res);
+        }
+        else
+        {
+            int32_t v = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+            v = clamp_i32(def->min, v, def->max);
+            me.setting_vals[def->id] = v;
+        }
+    }
+}
 
 static void persistence_init(void)
 {
