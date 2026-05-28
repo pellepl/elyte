@@ -109,12 +109,12 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         else if (me.adjust == ADJUST_CURRENT)
         {
 
-            me.ui.i_ma -= ui_scroll_time_accelerator((int)arg);
+            me.ui.i_ma = ui_scroll_time_accelerator(-(int)arg, me.ui.i_ma);
             me.ui.i_ma = clamp_i32(0, me.ui.i_ma, 1000);
         }
         else if (me.adjust == ADJUST_VOLTAGE)
         {
-            me.ui.v_mv -= ui_scroll_time_accelerator((int)arg);
+            me.ui.v_mv = ui_scroll_time_accelerator(-(int)arg, me.ui.v_mv);
             me.ui.v_mv = clamp_i32(0, me.ui.v_mv, 2500);
         }
         ui_trigger_update();

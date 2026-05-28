@@ -3,6 +3,7 @@
 #include "controller.h"
 #include "cpu.h"
 #include "cli.h"
+#include "input.h"
 #include "minio.h"
 #include "timer.h"
 #include "ui.h"
@@ -26,9 +27,6 @@ static struct
     timer_t timer_repaint;
     gfx_ctx_t ctx;
     uint32_t last_active_s;
-    int32_t last_scroll;
-    tick_t last_scroll_t;
-    uint32_t abs_scroll_int;
     uint32_t attention;
     bool keep_awake;
 } me;
@@ -259,35 +257,54 @@ void ui_attention_clear(void)
     me.attention = 0;
 }
 
-int ui_scroll_range_accelerator(int dscroll, int range)
+static int next_quantized_value(int value, int quantum, int direction)
 {
-    int mul = 1;
-    if (range == 0 || range > 1000)
-        range = 1000;
-    if (me.abs_scroll_int > 100)
+    int r;
+
+    if (quantum <= 0)
     {
-        mul = range / 10;
+        return value; // or assert/error
     }
-    else if (me.abs_scroll_int > 10)
+
+    r = value % quantum;
+
+    // Normalize remainder so negative values also work correctly.
+    if (r < 0)
     {
-        mul = range / 20;
+        r += quantum;
     }
-    else if (me.abs_scroll_int > 3)
+
+    if (direction > 0)
     {
-        mul = range / 100;
+        return value + (quantum - r);
     }
-    else if (me.abs_scroll_int > 1)
+    else if (direction < 0)
     {
-        mul = range / 200;
+        return value - (r ? r : quantum);
     }
-    return dscroll * mul;
+
+    return value;
 }
 
-int ui_scroll_time_accelerator(int dscroll)
+int ui_scroll_time_accelerator(int dscroll, int cur_val)
 {
     if (dscroll == 0)
-        return 0;
-    return dscroll < 0 ? -me.abs_scroll_int : me.abs_scroll_int;
+        return cur_val;
+    int acc = input_rotation_accelerator();
+    if (acc < 1 * SCROLL_ACCELERATOR_MAX / 8)
+        return cur_val += dscroll;
+    else if (acc < 2 * SCROLL_ACCELERATOR_MAX / 8)
+        return next_quantized_value(cur_val, 2, dscroll);
+    else if (acc < 3 * SCROLL_ACCELERATOR_MAX / 8)
+        return next_quantized_value(cur_val, 5, dscroll);
+    else if (acc < 4 * SCROLL_ACCELERATOR_MAX / 8)
+        return next_quantized_value(cur_val, 10, dscroll);
+    else if (acc < 5 * SCROLL_ACCELERATOR_MAX / 8)
+        return next_quantized_value(cur_val, 25, dscroll);
+    else if (acc < 6 * SCROLL_ACCELERATOR_MAX / 8)
+        return next_quantized_value(cur_val, 50, dscroll);
+    else
+        return next_quantized_value(cur_val, 100, dscroll);
 }
 
 static void ui_event(uint32_t type, void *arg)
@@ -320,24 +337,7 @@ static void ui_event(uint32_t type, void *arg)
     case EVENT_UI_PRESSHOLD:
         break;
     case EVENT_UI_SCRL:
-    {
-#define FACTOR 24
-        int scroll = (int)arg;
-        scroll = clamp_i32(-1, scroll, 1);
-        tick_t now = timer_now();
-        tick_t dt = (tick_t)sqrtf(now - me.last_scroll_t);
-        if (sign_i32(scroll) != sign_i32(me.last_scroll))
-            me.last_scroll_t = 0;
-        if (me.last_scroll_t == 0 || now - me.last_scroll_t > TIMER_MS_TO_TICKS(400))
-            me.abs_scroll_int = 0;
-        else
-            me.abs_scroll_int = me.abs_scroll_int * FACTOR / dt;
-        me.abs_scroll_int += abs_i32(scroll);
-        //printf("abs_scroll_int %d\n", me.abs_scroll_int);
-        me.last_scroll = scroll;
-        me.last_scroll_t = now;
-    }
-    break;
+        break;
 
     case EVENT_SECOND_TICK:
         if (me.disp_enabled)

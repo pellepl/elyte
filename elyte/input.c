@@ -23,6 +23,8 @@ static struct
     event_t ev_button;
     event_t ev_hw_scroll;
     event_t ev_scroll;
+    tick_t last_scroll_t;
+    int scroll_acc;
     int16_t rot_prev;
 } me;
 
@@ -120,14 +122,36 @@ void input_init(void)
     me.rot_prev = input_rot_read();
 }
 
+int input_rotation_accelerator(void)
+{
+    return me.scroll_acc;
+}
+
 static void scroll_event(uint32_t type, void *arg)
 {
     int16_t rot = input_rot_read();
-    if (me.rot_prev != rot)
+    if (me.rot_prev == rot)
+        return;
+
+    tick_t now = timer_now();
+    tick_t dt = now - me.last_scroll_t;
+    me.last_scroll_t = now;
+    if (dt > SCROLL_ACCELERATOR_COOLDOWN)
     {
-        me.button_during_rotation_mask |= me.button_mask;
-        event_add(&me.ev_scroll, EVENT_UI_SCRL, (void *)(int)(me.rot_prev - rot));
+        me.scroll_acc = 0;
     }
+    else if (dt < SCROLL_ACCELERATOR_ACC_TIME_LIMIT)
+    {
+        if (me.scroll_acc < SCROLL_ACCELERATOR_MAX)
+            me.scroll_acc++;
+    }
+    else if (dt >= SCROLL_ACCELERATOR_DEC_TIME_LIMIT)
+    {
+        if (me.scroll_acc > 0)
+            me.scroll_acc--;
+    }
+    me.button_during_rotation_mask |= me.button_mask;
+    event_add(&me.ev_scroll, EVENT_UI_SCRL, (void *)(int)(me.rot_prev - rot));
     me.rot_prev = rot;
 }
 
