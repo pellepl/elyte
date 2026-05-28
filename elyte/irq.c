@@ -72,7 +72,7 @@ IRQ(SPI3_IRQHandler);
 IRQ(UART4_IRQHandler);
 IRQ(UART5_IRQHandler);
 IRQ(TIM6_DAC_IRQHandler);
-IRQ(TIM7_IRQHandler);
+//IRQ(TIM7_IRQHandler);
 IRQ(DMA2_Channel1_IRQHandler);
 IRQ(DMA2_Channel2_IRQHandler);
 IRQ(DMA2_Channel3_IRQHandler);
