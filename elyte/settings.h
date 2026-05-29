@@ -1,5 +1,6 @@
 #pragma once
 
+#include <math.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -20,7 +21,7 @@ typedef struct {
     const char *name;
     const char *unit;
     uint16_t tag;
-    uint8_t e;
+    int8_t e;
 } setting_def_t;
 
 typedef struct {
@@ -29,3 +30,4 @@ typedef struct {
 } setting_t;
 
 setting_t *setting_get(setting_id_t id, setting_t *s);
+float setting_get_val(setting_id_t id);

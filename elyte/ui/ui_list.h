@@ -4,7 +4,11 @@
 
 typedef struct
 {
-    const char *string;
+    union
+    {
+        const char *string;
+        void *user;
+    };
 } ui_listitem_t;
 
 struct ui_list;
@@ -40,3 +44,4 @@ void ui_list_select(ui_list_t *list);
 void ui_list_unarm(ui_list_t *list);
 void ui_list_reset(ui_list_t *list);
 void ui_list_set_custom_item_painter(ui_list_t *list, ui_list_custom_item_paint_t item_paint, uint32_t item_height);
+ui_tick_t ui_list_paint_selector(ui_list_t *list, const gfx_ctx_t *ctx, int y);

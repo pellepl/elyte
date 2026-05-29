@@ -80,13 +80,13 @@ void ui_list_set_custom_item_painter(ui_list_t *list, ui_list_custom_item_paint_
     list->item_h = list->item_paint == NULL ? UI_FONT_ITEM->max_height : item_height;
 }
 
-static void paint_selector(ui_list_t *list, const gfx_ctx_t *ctx, int y)
+ui_tick_t ui_list_paint_selector(ui_list_t *list, const gfx_ctx_t *ctx, int y)
 {
     int anim = list->anim_select;
     if (anim >= ANIM_SELECT_TOTAL)
     {
         list->anim_select = ANIM_SELECT_TOTAL + 1;
-        return;
+        return UI_TICK_NEVER;
     }
     gfx_area_t a = {
         .x0 = list->x,
@@ -102,6 +102,7 @@ static void paint_selector(ui_list_t *list, const gfx_ctx_t *ctx, int y)
             list->anim_select += 1;
     }
     gfx_fill(ctx, &a, GFX_COL_XOR);
+    return 0;
 }
 
 ui_tick_t ui_list_paint(ui_list_t *list, const gfx_ctx_t *ctx)
@@ -111,24 +112,29 @@ ui_tick_t ui_list_paint(ui_list_t *list, const gfx_ctx_t *ctx)
     ui_tick_t t = UI_TICK_NEVER;
     for (uint8_t i = 0; i < list->item_count; i++)
     {
-        bool selected = i == list->selected_index;
-        if (list->item_paint)
+        if (y > ctx->clip.y1)
+            break;
+        if (y >= ctx->clip.y0 - list->item_h)
         {
-            t = min_u32(t, list->item_paint(list, ctx, i, selected, list->x, y, list->w, list->item_h));
-        }
-        else
-        {
-            const gfx_font_t *font = selected ? UI_FONT_ITEM : UI_FONT_ITEM_SMALL;
-            int dy = list->item_h / 2 - font->max_height / 2;
-            gfx_string(ctx, font, list->items[i].string, list->x + 8, y + dy, GFX_COL_SET);
-            if (selected)
+            bool selected = i == list->selected_index;
+            if (list->item_paint)
             {
-                paint_selector(list, ctx, y);
+                t = min_u32(t, list->item_paint(list, ctx, i, selected, list->x, y, list->w, list->item_h));
+            }
+            else
+            {
+                const gfx_font_t *font = selected ? UI_FONT_ITEM : UI_FONT_ITEM_SMALL;
+                int dy = list->item_h / 2 - font->max_height / 2;
+                gfx_string(ctx, font, list->items[i].string, list->x + 8, y + dy, GFX_COL_SET);
+                if (selected)
+                {
+                    t = min_u32(t, ui_list_paint_selector(list, ctx, y));
+                }
             }
         }
         y += list->item_h;
     }
-    if (list->y_current != list->y_target || (list->anim_select > 0 && list->anim_select <= ANIM_SELECT_TOTAL))
+    if (list->y_current != list->y_target)
     {
         t = 0;
     }

@@ -10,46 +10,46 @@
 #define NVMTNVJ_TAG_SIZE 12
 
 const setting_def_t defs[] = {
-    {.id = SETTING_SCREEN_ALIVE_S,
-     .name = "Screen alive",
-     .unit = "s",
-     .def = 60,
-     .max = 3600,
-     .min = 5,
-     .e = 0,
-     .tag = 1},
-    {.id = SETTING_CURR_CYCLE_PERIOD_S,
-     .name = "Current cycle period",
-     .unit = "s",
-     .def = 0,
-     .max = 300,
-     .min = 0,
-     .e = 0,
-     .tag = 2},
-    {.id = SETTING_CURR_CYCLE_DUTY_S,
-     .name = "Current cycle duty",
-     .unit = "s",
-     .def = 0,
-     .max = 300,
-     .min = 0,
-     .e = 0,
-     .tag = 3},
-    {.id = SETTING_CURR_CYCLE_LIMIT_MV,
-     .name = "Current cycle limit",
-     .unit = "mV",
-     .def = 0,
-     .max = 2500,
-     .min = 0,
-     .e = 0,
-     .tag = 4},
-    {.id = SETTING_SERVO_DELTA_S,
-     .name = "Servo period",
-     .unit = "s",
-     .def = 0,
-     .max = 300,
-     .min = 0,
-     .e = 0,
-     .tag = 5},
+    [SETTING_SCREEN_ALIVE_S] = {.id = SETTING_SCREEN_ALIVE_S,
+                                .name = "Screen alive",
+                                .unit = "s",
+                                .def = 60,
+                                .max = 3600,
+                                .min = 5,
+                                .e = 0,
+                                .tag = 1},
+    [SETTING_CURR_CYCLE_PERIOD_S] = {.id = SETTING_CURR_CYCLE_PERIOD_S,
+                                     .name = "Current cycle period",
+                                     .unit = "s",
+                                     .def = 0,
+                                     .max = 300,
+                                     .min = 0,
+                                     .e = 0,
+                                     .tag = 2},
+    [SETTING_CURR_CYCLE_DUTY_S] = {.id = SETTING_CURR_CYCLE_DUTY_S,
+                                   .name = "Current cycle duty",
+                                   .unit = "s",
+                                   .def = 0,
+                                   .max = 300,
+                                   .min = 0,
+                                   .e = 0,
+                                   .tag = 3},
+    [SETTING_CURR_CYCLE_LIMIT_MV] = {.id = SETTING_CURR_CYCLE_LIMIT_MV,
+                                     .name = "Current cycle limit",
+                                     .unit = "mV",
+                                     .def = 0,
+                                     .max = 2500,
+                                     .min = 0,
+                                     .e = 0,
+                                     .tag = 4},
+    [SETTING_SERVO_DELTA_S] = {.id = SETTING_SERVO_DELTA_S,
+                               .name = "Servo period",
+                               .unit = "s",
+                               .def = 0,
+                               .max = 300,
+                               .min = 0,
+                               .e = 0,
+                               .tag = 5},
 };
 
 static struct
@@ -61,14 +61,7 @@ setting_t *setting_get(setting_id_t id, setting_t *s)
 {
     if (id >= SETTING_COUNT)
         return NULL;
-    for (setting_id_t i = 0; i < SETTING_COUNT; i++)
-    {
-        if (defs[i].id == id)
-        {
-            s->def = &defs[i];
-            break;
-        }
-    }
+    s->def = &defs[id];
     s->value = me.setting_vals[id];
     return s;
 }
@@ -85,14 +78,11 @@ void settings_init(void)
         }
         uint8_t data[NVMTNVJ_TAG_SIZE];
         int res = nvmtnvj_read(def->tag, data);
-        if (res == ERR_NVMTNVJ_NOENT)
+        if (res < 0)
         {
             me.setting_vals[def->id] = def->def;
-            continue;
-        }
-        else if (res < 0)
-        {
-            printf("ERROR: settings init %d\n", res);
+            if (res != ERR_NVMTNVJ_NOENT)
+                printf("ERROR: settings init %d\n", res);
         }
         else
         {
@@ -101,6 +91,20 @@ void settings_init(void)
             me.setting_vals[def->id] = v;
         }
     }
+}
+
+float setting_get_val(setting_id_t id)
+{
+    static const float pow10[] = {
+        1e-6f, 1e-5f, 1e-4f, 1e-3f, 1e-2f, 1e-1f,
+        1e0f,
+        1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f};
+    if (id >= SETTING_COUNT)
+        return NAN;
+    int8_t e_ix = defs[id].e + ARRAY_LEN(pow10) / 2;
+    if (e_ix < 0 || e_ix >= (int8_t)ARRAY_LEN(pow10))
+        return NAN;
+    return (float)me.setting_vals[id] * pow10[e_ix];
 }
 
 static void persistence_init(void)
