@@ -10,6 +10,7 @@
 #include "gpio_driver.h"
 #include "gpio_driver.h"
 #include "minio.h"
+#include "settings.h"
 #include "timer.h"
 #include "utils.h"
 
@@ -44,6 +45,7 @@ static struct
     int32_t v_raw;
     uint16_t dac;
     volatile uint16_t holdoff;
+    uint64_t start_s;
     struct
     {
         bool enabled;
@@ -111,6 +113,7 @@ static void adjust_dac(void)
     if (me.set.curr == 0 || me.set.volt == 0)
         return;
 
+    uint32_t now_s = timer_uptime_ms() / 1000;
     dac_op_t last_op = me.dac_last_op;
 
     int32_t dac = (int32_t)me.dac;
@@ -140,6 +143,16 @@ static void adjust_dac(void)
         printf("SHORT\n");
         ctrl_set_dac(0);
         return;
+    }
+
+    uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
+    if (cycle_s > 0) {
+        uint32_t duty_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_DUTY_S);
+        float mv_limit = setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV);
+        if (v_avg * 1000.f > mv_limit && now_s % cycle_s >= duty_s) {
+            dac_set(0);
+            return;
+        }
     }
 
     if (dv_cur < -0.350f)
@@ -233,6 +246,7 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
             adc_current_gain_increase();
         else if (raw > 3 * ADC_RAW_MAX_VAL / 4)
             adc_current_gain_decrease();
+        adjust_dac();
     }
     break;
 
@@ -244,6 +258,9 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
 
 void ctrl_start(void)
 {
+    if (!me.enabled) {
+        me.start_s = timer_uptime_ms() / 1000;
+    }
     me.enabled = true;
 }
 
@@ -329,6 +346,9 @@ static void ctrl_event_handler(uint32_t type, void *arg)
         printf("V:%s %d I:%s %d x%d\tDAC:%d\n", ftostr(me.info.voltage_avg), me.v_raw, ftostr(me.info.current_avg), me.i_raw, (1 << me.adc_current_gain), me.dac);
         event_add(&me.ev_status, EVENT_STATUS, &me.info);
     }
+    break;
+    case EVENT_SETTING_CHANGE:
+
     break;
     default:
         break;
