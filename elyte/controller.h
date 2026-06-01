@@ -14,6 +14,7 @@ typedef enum
 
 typedef struct {
     uint16_t dac;
+    bool dac_off;
     float current_avg;
     float voltage_avg;
     float current_cur;

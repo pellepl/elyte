@@ -10,4 +10,4 @@ CUBE_PROGRAMMER_PATH := ~/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin
 
 flash: ${TARGET_DIR}/$(TARGETNAME).hex
 	@echo "Flashing $<"
-	$(v)$(CUBE_PROGRAMMER_PATH)/STM32_Programmer_CLI -q -c port=SWD -e all -w $< -rst > /dev/null 2>&1
+	$(v)$(CUBE_PROGRAMMER_PATH)/STM32_Programmer_CLI -q -c port=SWD -e all -w $< -v [fast] -rst

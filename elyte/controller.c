@@ -94,6 +94,7 @@ static void adc_current_gain_decrease(void)
 
 static void adjust_dac(void)
 {
+    me.info.dac_off = true;
     if (!me.enabled)
         return;
     bool i_maxed_reading = me.i_raw > (int)(0.99f * ADC_RAW_MAX_VAL);
@@ -145,82 +146,92 @@ static void adjust_dac(void)
         return;
     }
 
+    bool dac_disable = false;
     uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
-    if (cycle_s > 0) {
+    if (cycle_s > 0)
+    {
         uint32_t duty_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_DUTY_S);
         float mv_limit = setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV);
-        if (v_avg * 1000.f > mv_limit && now_s % cycle_s >= duty_s) {
-            dac_set(0);
-            return;
+        if (v_avg * 1000.f >= mv_limit && now_s % cycle_s >= duty_s)
+        {
+            dac_disable = true;
         }
     }
 
-    if (dv_cur < -0.350f)
+    if (!dac_disable)
     {
-        // instant voltage reading >= 0.35V too high, react instantly
-        dac /= 2;
-        me.dac_last_op = V_DEC;
+        if (dv_cur < -0.350f)
+        {
+            // instant voltage reading >= 0.35V too high, react instantly
+            dac /= 2;
+            me.dac_last_op = V_DEC;
+        }
+        else if (dv_avg < -0.100f)
+        {
+            // instant voltage reading >= 0.1V too high, react instantly
+            dac -= 20;
+            me.dac_last_op = V_DEC;
+        }
+        else if (di_cur < -0.100f)
+        {
+            // instant current reading >= 0.1A too high, react instantly
+            dac = dac * 3 / 4;
+            me.dac_last_op = I_DEC;
+        }
+        else if (dv_avg < 0)
+        {
+            // average voltage too high, lower DAC slowly
+            dac--;
+            me.dac_last_op = V_DEC;
+        }
+        else if (di_avg < -0.05f)
+        {
+            // average current too high, lower DAC slowly
+            dac -= 10;
+            me.dac_last_op = I_DEC;
+        }
+        else if (di_avg < 0)
+        {
+            // average current too high, lower DAC slowly
+            dac--;
+            me.dac_last_op = I_DEC;
+        }
+        else if (di_avg > 0.05f)
+        {
+            // average current much too low, raise DAC quickly (unless we just capped voltage)
+            dac += last_op == V_DEC ? 1 : 25;
+            me.dac_last_op = last_op == V_DEC ? V_DEC : I_INC;
+        }
+        else if (di_avg > 0.005f)
+        {
+            // average current pretty low, raise DAC quicklyish
+            dac += last_op == V_DEC ? 1 : 10;
+            me.dac_last_op = last_op == V_DEC ? V_DEC : I_INC;
+        }
+        else if (di_avg > 0)
+        {
+            // average current too low, raise DAC slowly
+            dac++;
+            me.dac_last_op = I_INC;
+        }
+        me.info.dac_op = me.dac_last_op;
+        me.info.dac_op_count = me.dac_op_count;
+        if (me.dac_last_op == I_DEC || me.dac_last_op == V_DEC)
+        {
+            me.info.dac_op_dec = me.dac_last_op;
+            me.info.dac_op_dec_count = me.dac_op_count;
+        }
+
+        dac = clamp_i32(MIN_DAC_VAL, dac, MAX_DAC_VAL);
+        me.dac_op_count++;
     }
-    else if (dv_avg < -0.100f)
+    else
     {
-        // instant voltage reading >= 0.1V too high, react instantly
-        dac -= 20;
-        me.dac_last_op = V_DEC;
-    }
-    else if (di_cur < -0.100f)
-    {
-        // instant current reading >= 0.1A too high, react instantly
-        dac = dac * 3 / 4;
-        me.dac_last_op = I_DEC;
-    }
-    else if (dv_avg < 0)
-    {
-        // average voltage too high, lower DAC slowly
-        dac--;
-        me.dac_last_op = V_DEC;
-    }
-    else if (di_avg < -0.05f)
-    {
-        // average current too high, lower DAC slowly
-        dac -= 10;
-        me.dac_last_op = I_DEC;
-    }
-    else if (di_avg < 0)
-    {
-        // average current too high, lower DAC slowly
-        dac--;
-        me.dac_last_op = I_DEC;
-    }
-    else if (di_avg > 0.05f)
-    {
-        // average current much too low, raise DAC quickly (unless we just capped voltage)
-        dac += last_op == V_DEC ? 1 : 25;
-        me.dac_last_op = last_op == V_DEC ? V_DEC : I_INC;
-    }
-    else if (di_avg > 0.005f)
-    {
-        // average current pretty low, raise DAC quicklyish
-        dac += last_op == V_DEC ? 1 : 10;
-        me.dac_last_op = last_op == V_DEC ? V_DEC : I_INC;
-    }
-    else if (di_avg > 0)
-    {
-        // average current too low, raise DAC slowly
-        dac++;
-        me.dac_last_op = I_INC;
-    }
-    me.info.dac_op = me.dac_last_op;
-    me.info.dac_op_count = me.dac_op_count;
-    if (me.dac_last_op == I_DEC || me.dac_last_op == V_DEC)
-    {
-        me.info.dac_op_dec = me.dac_last_op;
-        me.info.dac_op_dec_count = me.dac_op_count;
+        dac = 0;
     }
 
-    dac = clamp_i32(MIN_DAC_VAL, dac, MAX_DAC_VAL);
-
+    me.info.dac_off = false;
     ctrl_set_dac((uint16_t)dac);
-    me.dac_op_count++;
 }
 
 static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
@@ -258,7 +269,8 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
 
 void ctrl_start(void)
 {
-    if (!me.enabled) {
+    if (!me.enabled)
+    {
         me.start_s = timer_uptime_ms() / 1000;
     }
     me.enabled = true;
@@ -349,7 +361,7 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     break;
     case EVENT_SETTING_CHANGE:
 
-    break;
+        break;
     default:
         break;
     }

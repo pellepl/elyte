@@ -14,6 +14,7 @@
 #include "pwm.h"
 #include "ringbuffer.h"
 #include "second.h"
+#include "settings.h"
 #include "timer.h"
 #include "uart_driver.h"
 #include "ui.h"
@@ -117,6 +118,7 @@ int main(void)
     timer_init();
     cli_init(cli_cb, "\r\n;", " ,", "", "");
 
+    settings_init();
     adc_init();
 
     event_init(event_handler);

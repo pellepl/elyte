@@ -121,6 +121,8 @@ static void ui_disp_update(void)
     if (me.view_inactive)
     {
         gfx_ctx_t lctx = me.ctx;
+        if (me.anim_view_dx < 0)
+            lctx.clip.x1 = DISP_W + me.anim_view_dx;
         gfx_ctx_move(&lctx, me.anim_view_dx, 0);
         ui_tick_t pu = me.view_inactive->paint(me.view_inactive, &lctx);
         if (pu < paint_update)

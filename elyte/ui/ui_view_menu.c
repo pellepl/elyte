@@ -25,7 +25,7 @@ static const ui_listitem_t items[] = {
 
 static void init(const ui_view_t *this)
 {
-    ui_list_init(&me.list, items, ARRAY_LENGTH(items), LIST_ITEM_INFO, 0, 0, DISP_W, DISP_H);
+    ui_list_init(&me.list, items, ARRAY_LENGTH(items), LIST_ITEM_SETTINGS, 0, 0, DISP_W, DISP_H);
 }
 
 static void enter(const ui_view_t *this)

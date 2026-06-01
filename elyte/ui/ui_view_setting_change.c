@@ -7,8 +7,7 @@
 #include "ui_scrolltext.h"
 
 
-#define MSG_Y ((DISP_H / 4) + 1)
-
+#define MSG_Y (DISP_H / 4 + 6)
 static struct
 {
     const char *title;
@@ -30,6 +29,7 @@ static void enter(const ui_view_t *this)
 {
     ui_scrolltext_reset(&me.title_scrl);
     ui_scrolltext_reset(&me.descr_scrl);
+    me.last_mod_s = timer_uptime_ms() / 1000;
 }
 
 static void exit(const ui_view_t *this)
@@ -77,15 +77,15 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     ui_tick_t t = UI_TICK_NEVER;
     int y = 0;
     if (me.title_w > DISP_W)
-        t = min_u32(t, ui_scrolltext_paint(&me.descr_scrl, ctx));
+        t = min_u32(t, ui_scrolltext_paint(&me.title_scrl, ctx));
     else
         gfx_string(ctx, UI_FONT_NORMAL, me.setting.def->name, DISP_W / 2 - me.title_w / 2, y, GFX_COL_SET);
-    y = MSG_Y;
+    y += MSG_Y;
     if (me.descr_w > DISP_W)
         t = min_u32(t, ui_scrolltext_paint(&me.descr_scrl, ctx));
     else
         gfx_string(ctx, UI_FONT_SMALL, me.setting.def->descr, DISP_W / 2 - me.descr_w / 2, y, GFX_COL_SET);
-    y += DISP_H / 4 + 1;
+    y +=  MSG_Y;
 
     char str[32];
     snprintf(str, sizeof(str) - 1, "%d", me.setting.value);
@@ -104,7 +104,7 @@ void ui_setting_change(setting_id_t id, ui_setting_confirm_cb_t cb)
     me.title_w = gfx_string_width(UI_FONT_NORMAL, me.setting.def->name);
     me.descr_w = gfx_string_width(UI_FONT_SMALL, me.setting.def->descr);
     me.unit_w = gfx_string_width(UI_FONT_MINI, me.setting.def->unit);
-    ui_scrolltext_init(&me.title_scrl, me.setting.def->name, UI_FONT_BIG, 0, MSG_Y, DISP_W);
+    ui_scrolltext_init(&me.title_scrl, me.setting.def->name, UI_FONT_BIG, 0, 0, DISP_W);
     ui_scrolltext_init(&me.descr_scrl, me.setting.def->descr, UI_FONT_SMALL, 0, MSG_Y, DISP_W);
     ui_goto_view(&view_setting_change, false);
 }

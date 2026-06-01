@@ -33,3 +33,4 @@ typedef struct {
 int setting_set(setting_id_t id, int val);
 setting_t *setting_get(setting_id_t id, setting_t *s);
 float setting_get_val(setting_id_t id);
+void settings_init(void);

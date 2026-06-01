@@ -9,6 +9,7 @@
 #define NVMTNVJ_BLOCKS 3
 #define NVMTNVJ_SECTORS_PER_BLOCK 2
 #define NVMTNVJ_TAG_SIZE 12
+static void persistence_init(void);
 
 const setting_def_t defs[] = {
     [SETTING_SCREEN_ALIVE_S] = {.id = SETTING_SCREEN_ALIVE_S,
@@ -73,6 +74,7 @@ setting_t *setting_get(setting_id_t id, setting_t *s)
 
 void settings_init(void)
 {
+    persistence_init();
     for (size_t i = 0; i < ARRAY_LEN(defs); i++)
     {
         const setting_def_t *def = &defs[i];
@@ -94,6 +96,7 @@ void settings_init(void)
             int32_t v = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
             v = clamp_i32(def->min, v, def->max);
             me.setting_vals[def->id] = v;
+            printf("SETTING: %s = %s %s\n", def->name, ftostr1(setting_get_val(def->id)), def->unit);
         }
     }
 }

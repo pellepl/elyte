@@ -38,6 +38,7 @@ static void event_handler(uint32_t type, void *arg)
         gpio_set(PIN_LED_G, 0);
         timer_halt_ms(1);
         gpio_set(PIN_LED_G, 1);
+        gpio_set(PIN_LED_R, 1);
     }
 };
 EVENT_HANDLER(event_handler);

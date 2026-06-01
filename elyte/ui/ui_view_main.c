@@ -124,7 +124,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
 
     case EVENT_STATUS:
         me.info = *((status_info_t *)arg);
-        if (me.info.dac == 0)
+        if (me.info.dac == 0 && me.info.dac_off)
             me.info.voltage_avg = 0.f;
         ui_trigger_update();
         break;
@@ -141,7 +141,8 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
     default:
         break;
     }
-    if (me.adjust == SELECT_CURRENT || me.adjust == SELECT_VOLTAGE) {
+    if (me.adjust == SELECT_CURRENT || me.adjust == SELECT_VOLTAGE)
+    {
         me.adjust_last_select = me.adjust;
     }
 }
@@ -209,6 +210,13 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
                 .x0 = DISP_W - 10, .y0 = y + 2, .x1 = DISP_W - 2, .y1 = y + 10};
             gfx_fill(ctx, &limit_area, GFX_COL_SET);
         }
+    }
+
+    if (!me.info.dac_off && me.info.dac == 0)
+    {
+        gfx_area_t limit_area = {
+            .x0 = DISP_W - 10 + 2, .y0 = 12 + 2, .x1 = DISP_W - 2 - 2, .y1 = 12 + 8};
+        gfx_fill(ctx, &limit_area, GFX_COL_SET);
     }
 
     int select_size_target = 0;
