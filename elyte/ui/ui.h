@@ -8,9 +8,12 @@
 #include "font_roboto_semibold_16.h"
 #include "font_roboto_extrabold_20.h"
 #include "font_roboto_extrabold_30.h"
+#include "settings.h"
 
 #define _str(x) __str(x)
 #define __str(x) #x
+
+#define UI_MODIFICATION_TMO_S   15
 
 #define ARRAY_LENGTH(x) (sizeof(x) / (sizeof((x)[0])))
 
@@ -66,4 +69,5 @@ int ui_scroll_time_accelerator(int dscroll, int cur_val);
 typedef void (*ui_confirm_cb_t)(bool conf, const void *user);
 void ui_confirm(const char *title, const char *msg, ui_confirm_cb_t cb, const void *user);
 
-void ui_popup(const char *title, const char *msg, const char *button);
+typedef void (*ui_setting_confirm_cb_t)(setting_id_t id, bool conf, int value);
+void ui_setting_change(setting_id_t id, ui_setting_confirm_cb_t cb);

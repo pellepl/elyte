@@ -13,14 +13,14 @@ static struct
 enum
 {
     LIST_ITEM_BACK,
+    LIST_ITEM_SETTINGS,
     LIST_ITEM_INFO,
-    LIST_ITEM_TEMPHIST,
 };
 
 static const ui_listitem_t items[] = {
     [LIST_ITEM_BACK] = (ui_listitem_t){.string = "Back"},
     [LIST_ITEM_INFO] = (ui_listitem_t){.string = "System info"},
-    [LIST_ITEM_TEMPHIST] = (ui_listitem_t){.string = "Temp history"},
+    [LIST_ITEM_SETTINGS] = (ui_listitem_t){.string = "Settings"},
 };
 
 static void init(const ui_view_t *this)
@@ -44,8 +44,8 @@ static void handle_button(input_button_t button)
         case LIST_ITEM_BACK:
             ui_goto_view(&view_main, true);
             break;
-        case LIST_ITEM_TEMPHIST:
-            ui_goto_view(&view_graph, false);
+        case LIST_ITEM_SETTINGS:
+            ui_goto_view(&view_settings, false);
             break;
         case LIST_ITEM_INFO:
             ui_goto_view(&view_info, false);

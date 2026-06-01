@@ -79,13 +79,12 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         {
             me.adjust = me.adjust_last_select == NONE ? SELECT_CURRENT : me.adjust_last_select;
             me.ui.select_size = 0;
-            me.ui.select_y = me.ui.select_y_target = Y_CURRENT;
+            me.ui.select_y = me.ui.select_y_target = me.adjust == SELECT_CURRENT ? Y_CURRENT : Y_VOLTAGE;
             me.ui.i_ma = ctrl_get_current_ma();
             me.ui.v_mv = ctrl_get_voltage_mv();
         }
         else if (me.adjust == SELECT_CURRENT || me.adjust == SELECT_VOLTAGE)
         {
-
             me.adjust = me.adjust == SELECT_VOLTAGE ? ADJUST_VOLTAGE : ADJUST_CURRENT;
             me.ui.select_size = 0;
         }
@@ -131,7 +130,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         break;
 
     case EVENT_SECOND_TICK:
-        if (now_s - me.last_mod_s > 6)
+        if (now_s - me.last_mod_s > UI_MODIFICATION_TMO_S)
         {
             me.ui.select_size = 0;
             me.adjust = NONE;

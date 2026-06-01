@@ -22,6 +22,7 @@ static ui_tick_t item_painter(ui_list_t *list, const gfx_ctx_t *ctx, uint8_t ite
         return UI_TICK_NEVER;
     if (selected)
     {
+        ui_scrolltext_set_xy(&me.scrl, me.scrl.x, y);
         t = min_u32(t, ui_scrolltext_paint(&me.scrl, ctx));
     }
     else
@@ -42,7 +43,7 @@ static void update_selection(uint8_t ix)
 
 static void init(const ui_view_t *this)
 {
-    ui_scrolltext_init(&me.scrl, "", UI_FONT_ITEM, 0, 0, DISP_W * 2 / 3);
+    ui_scrolltext_init(&me.scrl, "", UI_FONT_ITEM, 0, 0, DISP_W);
     ui_list_init(&me.list, NULL, SETTING_COUNT, 0, 0, 0, DISP_W, DISP_H);
     ui_list_set_custom_item_painter(&me.list, item_painter, UI_FONT_ITEM->max_height);
 }
@@ -53,20 +54,13 @@ static void enter(const ui_view_t *this)
     ui_scrolltext_reset(&me.scrl);
 }
 
-static void handle_button(input_button_t button)
+static void setting_confirm_change_cb(setting_id_t id, bool conf, int value)
 {
-    switch (button)
-    {
-    case INPUT_BUTTON_ROTARY:
-    {
-        switch (ui_list_get_selected_index(&me.list))
-        {
-        }
-    }
-    break;
-    default:
-        break;
-    }
+    if (!conf)
+        return;
+    int err = setting_set(id, value);
+    if (err)
+        printf("ERROR: set %d = %d\n", id, value);
 }
 
 static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
@@ -74,9 +68,14 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
     switch (type)
     {
     case EVENT_UI_CLICK:
-        handle_button((input_button_t)arg);
+    {
+        setting_t s;
+        if (setting_get(ui_list_get_selected_index(&me.list), &s) == NULL)
+            break;
+        ui_setting_change(s.def->id, setting_confirm_change_cb);
         ui_trigger_update();
-        break;
+    }
+    break;
     case EVENT_UI_SCRL:
         ui_list_move_index(&me.list, (int)arg);
         update_selection(ui_list_get_selected_index(&me.list));

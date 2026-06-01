@@ -5,6 +5,7 @@
 #include "cli.h"
 #include "input.h"
 #include "minio.h"
+#include "settings.h"
 #include "timer.h"
 #include "ui.h"
 #include "ui_views.h"
@@ -343,7 +344,7 @@ static void ui_event(uint32_t type, void *arg)
         if (me.disp_enabled)
         {
             uint32_t now_s = (uint32_t)arg;
-            if (now_s - me.last_active_s > 60 && !me.keep_awake)
+            if (now_s - me.last_active_s > (int)setting_get_val(SETTING_SCREEN_ALIVE_S) && !me.keep_awake)
             {
                 if (me.attention != 0)
                 {

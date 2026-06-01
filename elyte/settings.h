@@ -19,6 +19,7 @@ typedef struct {
     int32_t max;
     int32_t def;
     const char *name;
+    const char *descr;
     const char *unit;
     uint16_t tag;
     int8_t e;
@@ -29,5 +30,6 @@ typedef struct {
     const setting_def_t *def;
 } setting_t;
 
+int setting_set(setting_id_t id, int val);
 setting_t *setting_get(setting_id_t id, setting_t *s);
 float setting_get_val(setting_id_t id);

@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "events.h"
 #include "flash_driver.h"
 #include "minio.h"
 #include "nvmtnvj.h"
@@ -55,6 +56,7 @@ const setting_def_t defs[] = {
 static struct
 {
     int32_t setting_vals[SETTING_COUNT];
+    event_t ev_setting_change;
 } me;
 
 setting_t *setting_get(setting_id_t id, setting_t *s)
@@ -105,6 +107,29 @@ float setting_get_val(setting_id_t id)
     if (e_ix < 0 || e_ix >= (int8_t)ARRAY_LEN(pow10))
         return NAN;
     return (float)me.setting_vals[id] * pow10[e_ix];
+}
+
+int setting_set(setting_id_t id, int val)
+{
+    int err = 0;
+    if (id >= SETTING_COUNT)
+        return -1;
+    val = clamp_i32(defs[id].min, val, defs[id].max);
+    if (defs[id].tag)
+    {
+        uint8_t data[NVMTNVJ_TAG_SIZE];
+        data[0] = val & 0xff;
+        data[1] = (val >> 8) & 0xff;
+        data[2] = (val >> 16) & 0xff;
+        data[3] = (val >> 24) & 0xff;
+        err = nvmtnvj_write(defs[id].tag, data, 4);
+    }
+    if (!err)
+    {
+        me.setting_vals[id] = val;
+        event_add(&me.ev_setting_change, EVENT_SETTING_CHANGE, (void *)id);
+    }
+    return err;
 }
 
 static void persistence_init(void)
