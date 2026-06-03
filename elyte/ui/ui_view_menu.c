@@ -70,6 +70,11 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         ui_list_move_index(&me.list, (int)arg);
         ui_trigger_update();
         break;
+    case EVENT_UI_PRESSHOLD:
+        ui_goto_view(&view_main, true);
+        ui_trigger_update();
+        break;
+
     default:
         break;
     }

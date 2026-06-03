@@ -55,7 +55,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         break;
     case EVENT_UI_SCRL:
         me.last_mod_s = now_s;
-        me.setting.value = ui_scroll_time_accelerator(-(int)arg, me.setting.value);
+        me.setting.value = ui_scroll_time_accelerator(sign_i32(-(int)arg), me.setting.value);
         me.setting.value = clamp_i32(me.setting.def->min, me.setting.value, me.setting.def->max);
         ui_trigger_update();
         break;
