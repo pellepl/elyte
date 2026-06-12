@@ -15,7 +15,7 @@ const setting_def_t defs[] = {
     [SETTING_SCREEN_ALIVE_S] = {.id = SETTING_SCREEN_ALIVE_S,
                                 .name = "Screen alive",
                                 .unit = "s",
-                                .def = 60,
+                                .def = 180,
                                 .max = 3600,
                                 .min = 5,
                                 .e = 0,
@@ -55,6 +55,15 @@ const setting_def_t defs[] = {
                                .min = 0,
                                .e = 0,
                                .tag = 5},
+    [SETTING_SHORT_MV_AT_10_MA] = {.id = SETTING_SHORT_MV_AT_10_MA,
+                                   .name = "Short voltage",
+                                   .descr = "Lower voltage at 10mA indicates short",
+                                   .unit = "mV",
+                                   .def = -8,
+                                   .max = 25,
+                                   .min = -25,
+                                   .e = -3,
+                                   .tag = 6},
 };
 
 static struct

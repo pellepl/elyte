@@ -173,10 +173,17 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
         {
             sprintf(str, "%d", setting);
             gfx_string(ctx, UI_FONT_HUGE, str, 8, y, GFX_COL_SET);
-            if (i)
-                sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+            if (setting == 0)
+            {
+                sprintf(str, "--");
+            }
             else
-                sprintf(str, "%d", value);
+            {
+                if (i)
+                    sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+                else
+                    sprintf(str, "%d", value);
+            }
             str_w = gfx_string_width(UI_FONT_MINI, str);
             gfx_string(ctx, UI_FONT_MINI, str, DISP_W - unit_w - str_w,
                        y + UI_FONT_HUGE->max_height - UI_FONT_MINI->max_height - 4, GFX_COL_SET);
@@ -185,19 +192,33 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
         {
             sprintf(str, "%d", setting);
             gfx_string(ctx, UI_FONT_MINI, str, 8, y, GFX_COL_SET);
-            if (i)
-                sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+            if (setting == 0)
+            {
+                sprintf(str, "--");
+            }
             else
-                sprintf(str, "%d", value);
+            {
+                if (i)
+                    sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+                else
+                    sprintf(str, "%d", value);
+            }
             str_w = gfx_string_width(UI_FONT_HUGE, str);
             gfx_string(ctx, UI_FONT_HUGE, str, DISP_W - unit_w - str_w, y, GFX_COL_SET);
         }
         else
         {
-            if (i)
-                sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+            if (setting == 0)
+            {
+                sprintf(str, "--");
+            }
             else
-                sprintf(str, "%d", value);
+            {
+                if (i)
+                    sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+                else
+                    sprintf(str, "%d", value);
+            }
             str_w = gfx_string_width(UI_FONT_HUGE, str);
             gfx_string(ctx, UI_FONT_HUGE, str, DISP_W - unit_w - str_w, y, GFX_COL_SET);
         }

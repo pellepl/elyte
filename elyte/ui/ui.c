@@ -294,17 +294,17 @@ int ui_scroll_time_accelerator(int dscroll, int cur_val)
     if (dscroll == 0)
         return cur_val;
     int acc = input_rotation_accelerator();
-    if (acc < 1 * SCROLL_ACCELERATOR_MAX / 8)
+    if (acc < 3 * SCROLL_ACCELERATOR_MAX / 16)
         return cur_val += dscroll;
-    else if (acc < 2 * SCROLL_ACCELERATOR_MAX / 8)
+    else if (acc < 6 * SCROLL_ACCELERATOR_MAX / 16)
         return next_quantized_value(cur_val, 2, dscroll);
-    else if (acc < 3 * SCROLL_ACCELERATOR_MAX / 8)
+    else if (acc < 9 * SCROLL_ACCELERATOR_MAX / 16)
         return next_quantized_value(cur_val, 5, dscroll);
-    else if (acc < 4 * SCROLL_ACCELERATOR_MAX / 8)
+    else if (acc < 11 * SCROLL_ACCELERATOR_MAX / 16)
         return next_quantized_value(cur_val, 10, dscroll);
-    else if (acc < 5 * SCROLL_ACCELERATOR_MAX / 8)
+    else if (acc < 13 * SCROLL_ACCELERATOR_MAX / 16)
         return next_quantized_value(cur_val, 25, dscroll);
-    else if (acc < 6 * SCROLL_ACCELERATOR_MAX / 8)
+    else if (acc < 14 * SCROLL_ACCELERATOR_MAX / 16)
         return next_quantized_value(cur_val, 50, dscroll);
     else
         return next_quantized_value(cur_val, 100, dscroll);

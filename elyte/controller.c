@@ -4,6 +4,7 @@
 #include "adc.h"
 #include "assert.h"
 #include "board.h"
+#include "cli.h"
 #include "controller.h"
 #include "dac.h"
 #include "events.h"
@@ -14,11 +15,16 @@
 #include "timer.h"
 #include "utils.h"
 
+#define HOLDOFF_DISCONNECT_S 1
+#define HOLDOFF_SHORT_S 3
+
 #define MIN_DAC_VAL 640
 #define MAX_DAC_VAL 0xfff
 
 #define SAMPLE_DELTA_MS 10 // this will be divided by 2 as we're sampling V & C alternating
 #define AVG_BUF 8
+
+#define VDEC_OP_COUNT 25 // number of consecutive voltage-decrease DAC ops to consider voltage as the main issue when deciding how to increase DAC
 
 // Max time to detect max current
 // SAMPLE_DELTA_MS * 2 * GAIN_MAX = 80ms
@@ -54,6 +60,9 @@ static struct
     } set;
     dac_op_t dac_last_op;
     uint32_t dac_op_count;
+    uint32_t vdec_op_count;
+    float short_mV_at_10_mA;
+    volatile bool log_enabled;
 } me;
 
 static void avg_buffer_add(avg_buffer_t *b, float v)
@@ -136,12 +145,22 @@ static void adjust_dac(void)
     if (abs_f(di_avg) < EPS)
         di_avg = 0.f;
 
-    if (v_avg <= EPS && i_avg >= 0.003f && dac > MIN_DAC_VAL)
+    if (v_avg <= me.short_mV_at_10_mA && i_avg >= 0.01f && dac > MIN_DAC_VAL)
     {
         // zero voltage, but current => shorted, hold off instantly
-        me.holdoff = 3;
+        me.holdoff = HOLDOFF_SHORT_S;
         me.info.holdoff = me.holdoff;
-        printf("SHORT\n");
+        ctrl_set_dac(0);
+        printf("SHORT %s mV < %s, %s mA\n", ftostr1(v_avg * 1000.f), ftostr1(me.short_mV_at_10_mA * 1000.f), ftostr1(i_avg * 1000.f));
+        return;
+    }
+
+    if (v_cur > 2.5f && dv_cur < -0.350f && dac == MIN_DAC_VAL)
+    {
+        // disconnect
+        me.holdoff = HOLDOFF_DISCONNECT_S;
+        me.info.holdoff = me.holdoff;
+        printf("DISCONNECT\n");
         ctrl_set_dac(0);
         return;
     }
@@ -160,59 +179,88 @@ static void adjust_dac(void)
 
     if (!dac_disable)
     {
+        bool log = me.log_enabled;
         if (dv_cur < -0.350f)
         {
             // instant voltage reading >= 0.35V too high, react instantly
+            if (log)
+                printf("DAC %d/2: V_CUR >= 0.35V TOO HIGH\n", dac);
             dac /= 2;
             me.dac_last_op = V_DEC;
         }
         else if (dv_avg < -0.100f)
         {
             // instant voltage reading >= 0.1V too high, react instantly
+            if (log)
+                printf("DAC %d-20: V_AVG >= 0.1V TOO HIGH\n", dac);
             dac -= 20;
             me.dac_last_op = V_DEC;
         }
         else if (di_cur < -0.100f)
         {
             // instant current reading >= 0.1A too high, react instantly
+            if (log)
+                printf("DAC %d*3/4: I_CUR >= 0.1A TOO HIGH\n", dac);
             dac = dac * 3 / 4;
             me.dac_last_op = I_DEC;
         }
         else if (dv_avg < 0)
         {
             // average voltage too high, lower DAC slowly
+            if (log)
+                printf("DAC %d-1: V_AVG > 0 TOO HIGH\n", dac);
             dac--;
             me.dac_last_op = V_DEC;
         }
         else if (di_avg < -0.05f)
         {
             // average current too high, lower DAC slowly
+            if (log)
+                printf("DAC %d-10: I_AVG >= 50mA TOO HIGH\n", dac);
             dac -= 10;
             me.dac_last_op = I_DEC;
         }
         else if (di_avg < 0)
         {
             // average current too high, lower DAC slowly
+            if (log)
+                printf("DAC %d-1: I_AVG > 0 TOO HIGH\n", dac);
             dac--;
             me.dac_last_op = I_DEC;
         }
         else if (di_avg > 0.05f)
         {
             // average current much too low, raise DAC quickly (unless we just capped voltage)
+            if (log)
+                printf("DAC %d+1/25: I_AVG >= 50mA TOO LOW\n", dac);
             dac += last_op == V_DEC ? 1 : 25;
-            me.dac_last_op = last_op == V_DEC ? V_DEC : I_INC;
+            me.dac_last_op = last_op == V_DEC && me.vdec_op_count < VDEC_OP_COUNT ? V_DEC : I_INC;
         }
         else if (di_avg > 0.005f)
         {
             // average current pretty low, raise DAC quicklyish
+            if (log)
+                printf("DAC %d+1/10: I_AVG >= 5mA TOO LOW\n", dac);
             dac += last_op == V_DEC ? 1 : 10;
-            me.dac_last_op = last_op == V_DEC ? V_DEC : I_INC;
+            me.dac_last_op = last_op == V_DEC && me.vdec_op_count < VDEC_OP_COUNT ? V_DEC : I_INC;
         }
         else if (di_avg > 0)
         {
             // average current too low, raise DAC slowly
+            if (log)
+                printf("DAC %d+1: I_AVG TOO LOW\n", dac);
             dac++;
             me.dac_last_op = I_INC;
+        }
+
+        if (me.dac_last_op == V_DEC)
+        {
+            if (me.vdec_op_count < VDEC_OP_COUNT)
+                me.vdec_op_count++;
+        }
+        else
+        {
+            me.vdec_op_count = 0;
         }
         me.info.dac_op = me.dac_last_op;
         me.info.dac_op_count = me.dac_op_count;
@@ -269,6 +317,7 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
 
 void ctrl_start(void)
 {
+    me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
     if (!me.enabled)
     {
         me.start_s = timer_uptime_ms() / 1000;
@@ -284,6 +333,7 @@ void ctrl_stop(void)
 void ctrl_init(void)
 {
     int res;
+    me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
     me.adc_current_gain = GAIN_MIN;
     me.enabled = true;
     adc_adjust_gain_continuous(me.adc_current_gain);
@@ -360,10 +410,21 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     }
     break;
     case EVENT_SETTING_CHANGE:
-
+        me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
         break;
     default:
         break;
     }
 }
 EVENT_HANDLER(ctrl_event_handler);
+
+static int cli_ctrl_log(int argc, const char **argv)
+{
+    if (argc > 0)
+    {
+        me.log_enabled = argv[0][0] == '1';
+    }
+    printf("CTRL LOG: %s\n", me.log_enabled ? "ON" : "OFF");
+    return 0;
+}
+CLI_FUNCTION(cli_ctrl_log, "ctrl_log", "(0|1): log each dac adjustment")
