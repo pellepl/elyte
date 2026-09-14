@@ -1,3 +1,4 @@
+#include <float.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,6 +11,7 @@
 #include "events.h"
 #include "gpio_driver.h"
 #include "gpio_driver.h"
+#include "irq.h"
 #include "minio.h"
 #include "settings.h"
 #include "timer.h"
@@ -37,6 +39,25 @@ typedef struct
     uint8_t ix;
 } avg_buffer_t;
 
+typedef struct
+{
+    float max;
+    float min;
+    float sum;
+    int samples;
+} monitored_value_t;
+
+typedef union
+{
+    struct
+    {
+        bool no_dac_disconnect : 1;
+        bool no_dac_short : 1;
+        bool no_dac_period : 1;
+    };
+    uint32_t flags_all;
+} flags_t;
+
 static struct
 {
     volatile bool panic;
@@ -63,7 +84,39 @@ static struct
     uint32_t vdec_op_count;
     float short_mV_at_10_mA;
     volatile bool log_enabled;
+    struct
+    {
+        uint32_t ix;
+        monitored_value_t mv;
+        monitored_value_t ma;
+        flags_t flags;
+    } second_report;
 } me;
+
+static void monitored_value_reset(monitored_value_t *v)
+{
+    v->max = -FLT_MAX;
+    v->min = FLT_MAX;
+    v->sum = 0.f;
+    v->samples = 0;
+}
+
+static void monitored_value_register(monitored_value_t *v, float val)
+{
+    if (v->max < val)
+        v->max = val;
+    if (v->min > val)
+        v->min = val;
+    v->sum += val;
+    v->samples++;
+}
+
+static float monitored_value_avg(monitored_value_t *v)
+{
+    if (v->samples == 0)
+        return NAN;
+    return v->sum / (float)v->samples;
+}
 
 static void avg_buffer_add(avg_buffer_t *b, float v)
 {
@@ -114,6 +167,7 @@ static void adjust_dac(void)
         me.info.holdoff = me.holdoff;
         printf("SHORT\n");
         ctrl_set_dac(0);
+        me.second_report.flags.no_dac_short = true;
         return;
     }
 
@@ -152,6 +206,7 @@ static void adjust_dac(void)
         me.info.holdoff = me.holdoff;
         ctrl_set_dac(0);
         printf("SHORT %s mV < %s, %s mA\n", ftostr1(v_avg * 1000.f), ftostr1(me.short_mV_at_10_mA * 1000.f), ftostr1(i_avg * 1000.f));
+        me.second_report.flags.no_dac_short = true;
         return;
     }
 
@@ -162,6 +217,7 @@ static void adjust_dac(void)
         me.info.holdoff = me.holdoff;
         printf("DISCONNECT\n");
         ctrl_set_dac(0);
+        me.second_report.flags.no_dac_disconnect = true;
         return;
     }
 
@@ -176,6 +232,7 @@ static void adjust_dac(void)
             me.holdoff = 1;
             me.info.holdoff = me.holdoff;
             dac_disable = true;
+            me.second_report.flags.no_dac_period = true;
         }
     }
 
@@ -292,6 +349,7 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     {
     case ADC_VOLTAGE:
         me.v_raw = raw;
+        monitored_value_register(&me.second_report.mv, val);
         avg_buffer_add(&me.voltage, val);
         me.info.voltage_cur = val;
         me.info.voltage_avg = avg_buffer_get_avg(&me.voltage);
@@ -300,6 +358,7 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     case ADC_CURRENT:
     {
         me.i_raw = raw;
+        monitored_value_register(&me.second_report.ma, val);
         avg_buffer_add(&me.current, val);
         me.info.current_cur = val;
         me.info.current_avg = avg_buffer_get_avg(&me.current);
@@ -323,6 +382,10 @@ void ctrl_start(void)
     if (!me.enabled)
     {
         me.start_s = timer_uptime_ms() / 1000;
+        monitored_value_reset(&me.second_report.ma);
+        monitored_value_reset(&me.second_report.mv);
+        me.second_report.ix = 0;
+        me.second_report.flags.flags_all = 0;
     }
     me.enabled = true;
 }
@@ -395,19 +458,49 @@ int32_t ctrl_get_voltage_mv(void)
     return (int32_t)(me.set.volt * 1000.f);
 }
 
+static void output_second_report(uint16_t holdoff_s)
+{
+    uint32_t primask = cpu_primask_save_and_disable();
+    flags_t flags = me.second_report.flags;
+    monitored_value_t m_ma = me.second_report.ma;
+    monitored_value_t m_mv = me.second_report.mv;
+    me.second_report.flags.flags_all = 0;
+    monitored_value_reset(&me.second_report.ma);
+    monitored_value_reset(&me.second_report.mv);
+    cpu_primask_restore(primask);
+    float ma_avg = monitored_value_avg(&m_ma);
+    float mv_avg = monitored_value_avg(&m_mv);
+    printf("%8d ", me.second_report.ix);
+    printf("V:%s>%s>%s ", ftostr(m_mv.min), ftostr(mv_avg), ftostr(m_mv.max));
+    printf("I:%s>%s>%s ", ftostr(m_ma.min), ftostr(ma_avg), ftostr(m_ma.max));
+    printf("DAC:%4d ", me.dac);
+    if (holdoff_s)
+        printf("OFF:%ds ", holdoff_s);
+    if (flags.no_dac_disconnect)
+        printf("DIS ");
+    if (flags.no_dac_short)
+        printf("SHO ");
+    if (flags.no_dac_period)
+        printf("PER ");
+
+    printf("\n");
+    me.second_report.ix++;
+}
+
 static void ctrl_event_handler(uint32_t type, void *arg)
 {
     switch (type)
     {
     case EVENT_SECOND_TICK:
     {
+        uint16_t old_holdoff = me.holdoff;
         if (me.holdoff)
         {
             me.holdoff--;
             me.info.holdoff = me.holdoff;
             ctrl_set_dac(0);
         }
-        printf("V:%s %d I:%s %d x%d\tDAC:%d\n", ftostr(me.info.voltage_avg), me.v_raw, ftostr(me.info.current_avg), me.i_raw, (1 << me.adc_current_gain), me.dac);
+        output_second_report(old_holdoff);
         event_add(&me.ev_status, EVENT_STATUS, &me.info);
     }
     break;

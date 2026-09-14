@@ -1,3 +1,4 @@
+#include <float.h>
 #include <math.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -47,6 +48,10 @@ const char *ftostr(float x)
 {
     if (isnanf(x))
         return "NAN";
+    if (x == -FLT_MAX)
+        return "MIN";
+    if (x == FLT_MAX)
+        return "MAX";
     fstrbuf.cur_buf = (fstrbuf.cur_buf + 1) % MAX_FLOATS_IN_A_PRINTF;
     char *buf_p = fstrbuf.bufs[fstrbuf.cur_buf];
     char *p = buf_p;
