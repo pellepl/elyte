@@ -110,7 +110,7 @@ static void adjust_dac(void)
     if (me.adc_current_gain == GAIN_MIN && i_maxed_reading)
     {
         // current maxed => shorted, hold off instantly
-        me.holdoff = 3;
+        me.holdoff = HOLDOFF_SHORT_S;
         me.info.holdoff = me.holdoff;
         printf("SHORT\n");
         ctrl_set_dac(0);
@@ -173,6 +173,8 @@ static void adjust_dac(void)
         float mv_limit = setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV);
         if (v_avg * 1000.f >= mv_limit && now_s % cycle_s >= duty_s)
         {
+            me.holdoff = 1;
+            me.info.holdoff = me.holdoff;
             dac_disable = true;
         }
     }
