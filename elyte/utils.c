@@ -47,11 +47,11 @@ static inline uint32_t ufrac_f10(float a)
 const char *ftostr(float x)
 {
     if (isnanf(x))
-        return "NAN";
+        return "(nan)";
     if (x == -FLT_MAX)
-        return "MIN";
+        return "(min))";
     if (x == FLT_MAX)
-        return "MAX";
+        return "(max)";
     fstrbuf.cur_buf = (fstrbuf.cur_buf + 1) % MAX_FLOATS_IN_A_PRINTF;
     char *buf_p = fstrbuf.bufs[fstrbuf.cur_buf];
     char *p = buf_p;
@@ -68,7 +68,11 @@ const char *ftostr(float x)
 const char *ftostr1(float x)
 {
     if (isnanf(x))
-        return "NAN";
+        return "(nan)";
+    if (x == -FLT_MAX)
+        return "(min))";
+    if (x == FLT_MAX)
+        return "(max)";
     fstrbuf.cur_buf = (fstrbuf.cur_buf + 1) % MAX_FLOATS_IN_A_PRINTF;
     char *buf_p = fstrbuf.bufs[fstrbuf.cur_buf];
     char *p = buf_p;

@@ -349,7 +349,7 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     {
     case ADC_VOLTAGE:
         me.v_raw = raw;
-        monitored_value_register(&me.second_report.mv, val);
+        monitored_value_register(&me.second_report.mv, val * 1000.f);
         avg_buffer_add(&me.voltage, val);
         me.info.voltage_cur = val;
         me.info.voltage_avg = avg_buffer_get_avg(&me.voltage);
@@ -358,7 +358,7 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     case ADC_CURRENT:
     {
         me.i_raw = raw;
-        monitored_value_register(&me.second_report.ma, val);
+        monitored_value_register(&me.second_report.ma, val * 1000.f);
         avg_buffer_add(&me.current, val);
         me.info.current_cur = val;
         me.info.current_avg = avg_buffer_get_avg(&me.current);
@@ -471,8 +471,8 @@ static void output_second_report(uint16_t holdoff_s)
     float ma_avg = monitored_value_avg(&m_ma);
     float mv_avg = monitored_value_avg(&m_mv);
     printf("%8d ", me.second_report.ix);
-    printf("V:%s>%s>%s ", ftostr(m_mv.min), ftostr(mv_avg), ftostr(m_mv.max));
-    printf("I:%s>%s>%s ", ftostr(m_ma.min), ftostr(ma_avg), ftostr(m_ma.max));
+    printf("V:%s>%s>%s [%s] ", ftostr1(m_mv.min), ftostr1(mv_avg), ftostr1(m_mv.max), ftostr1(me.set.volt * 1000.f));
+    printf("I:%s>%s>%s [%s] ", ftostr1(m_ma.min), ftostr1(ma_avg), ftostr1(m_ma.max), ftostr1(me.set.curr * 1000.f));
     printf("DAC:%4d ", me.dac);
     if (holdoff_s)
         printf("OFF:%ds ", holdoff_s);
@@ -481,8 +481,7 @@ static void output_second_report(uint16_t holdoff_s)
     if (flags.no_dac_short)
         printf("SHO ");
     if (flags.no_dac_period)
-        printf("PER ");
-
+        printf("PER[%s] ", ftostr1(setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV)));
     printf("\n");
     me.second_report.ix++;
 }
