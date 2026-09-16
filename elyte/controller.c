@@ -470,7 +470,7 @@ static void output_second_report(uint16_t holdoff_s)
     cpu_primask_restore(primask);
     float ma_avg = monitored_value_avg(&m_ma);
     float mv_avg = monitored_value_avg(&m_mv);
-    printf("%8d ", me.second_report.ix);
+    printf("%08d ", me.second_report.ix);
     printf("V:%s>%s>%s [%s] ", ftostr1(m_mv.min), ftostr1(mv_avg), ftostr1(m_mv.max), ftostr1(me.set.volt * 1000.f));
     printf("I:%s>%s>%s [%s] ", ftostr1(m_ma.min), ftostr1(ma_avg), ftostr1(m_ma.max), ftostr1(me.set.curr * 1000.f));
     printf("DAC:%4d ", me.dac);
