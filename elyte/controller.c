@@ -72,6 +72,8 @@ static struct
     int32_t v_raw;
     uint16_t dac;
     volatile uint16_t holdoff;
+    volatile uint64_t uptime_s;
+    volatile flags_t flags;
     uint64_t start_s;
     struct
     {
@@ -154,6 +156,28 @@ static void adc_current_gain_decrease(void)
     adc_adjust_gain_continuous(me.adc_current_gain);
 }
 
+static void signal_short(uint16_t holdoff_s)
+{
+    me.second_report.flags.no_dac_short = true;
+    me.flags.no_dac_short = true;
+    me.holdoff = holdoff_s;
+    me.info.holdoff = me.holdoff;
+}
+
+static void signal_disconnect(uint16_t holdoff_s)
+{
+    me.second_report.flags.no_dac_disconnect = true;
+    me.flags.no_dac_disconnect = true;
+    me.holdoff = holdoff_s;
+    me.info.holdoff = me.holdoff;
+}
+
+static void signal_period(void)
+{
+    me.second_report.flags.no_dac_period = true;
+    me.flags.no_dac_period = true;
+}
+
 static void adjust_dac(void)
 {
     me.info.dac_off = true;
@@ -163,11 +187,8 @@ static void adjust_dac(void)
     if (me.adc_current_gain == GAIN_MIN && i_maxed_reading)
     {
         // current maxed => shorted, hold off instantly
-        me.holdoff = HOLDOFF_SHORT_S;
-        me.info.holdoff = me.holdoff;
-        printf("SHORT\n");
         ctrl_set_dac(0);
-        me.second_report.flags.no_dac_short = true;
+        signal_short(HOLDOFF_SHORT_S);
         return;
     }
 
@@ -177,7 +198,7 @@ static void adjust_dac(void)
     if (me.set.curr == 0 || me.set.volt == 0)
         return;
 
-    uint32_t now_s = timer_uptime_ms() / 1000;
+    uint32_t now_s = (uint32_t)me.uptime_s;
     dac_op_t last_op = me.dac_last_op;
 
     int32_t dac = (int32_t)me.dac;
@@ -199,40 +220,37 @@ static void adjust_dac(void)
     if (abs_f(di_avg) < EPS)
         di_avg = 0.f;
 
+    // check short
     if (v_avg <= me.short_mV_at_10_mA && i_avg >= 0.01f && dac > MIN_DAC_VAL)
     {
         // zero voltage, but current => shorted, hold off instantly
-        me.holdoff = HOLDOFF_SHORT_S;
-        me.info.holdoff = me.holdoff;
         ctrl_set_dac(0);
-        printf("SHORT %s mV < %s, %s mA\n", ftostr1(v_avg * 1000.f), ftostr1(me.short_mV_at_10_mA * 1000.f), ftostr1(i_avg * 1000.f));
-        me.second_report.flags.no_dac_short = true;
+        signal_short(HOLDOFF_SHORT_S);
         return;
     }
 
+    // check disconnect
     if (v_cur > 2.5f && dv_cur < -0.350f && dac == MIN_DAC_VAL)
     {
-        // disconnect
-        me.holdoff = HOLDOFF_DISCONNECT_S;
-        me.info.holdoff = me.holdoff;
-        printf("DISCONNECT\n");
         ctrl_set_dac(0);
-        me.second_report.flags.no_dac_disconnect = true;
+        signal_disconnect(HOLDOFF_DISCONNECT_S);
         return;
     }
 
     bool dac_disable = false;
-    uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
+
+    // check periodic
+    const uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
     if (cycle_s > 0)
     {
-        uint32_t duty_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_DUTY_S);
+        const uint32_t duty_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_DUTY_S);
         float mv_limit = setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV);
-        if (v_avg * 1000.f >= mv_limit && now_s % cycle_s >= duty_s)
+        if ((v_avg * 1000.f >= mv_limit && (now_s % cycle_s) >= duty_s) || me.flags.no_dac_period)
         {
             me.holdoff = 1;
             me.info.holdoff = me.holdoff;
             dac_disable = true;
-            me.second_report.flags.no_dac_period = true;
+            signal_period();
         }
     }
 
@@ -382,6 +400,7 @@ void ctrl_start(void)
     if (!me.enabled)
     {
         me.start_s = timer_uptime_ms() / 1000;
+        me.uptime_s = 0;
         monitored_value_reset(&me.second_report.ma);
         monitored_value_reset(&me.second_report.mv);
         me.second_report.ix = 0;
@@ -460,7 +479,9 @@ int32_t ctrl_get_voltage_mv(void)
 
 static void output_second_report(uint16_t holdoff_s)
 {
+
     uint32_t primask = cpu_primask_save_and_disable();
+    bool dac_off = (me.info.dac == 0);
     flags_t flags = me.second_report.flags;
     monitored_value_t m_ma = me.second_report.ma;
     monitored_value_t m_mv = me.second_report.mv;
@@ -471,7 +492,10 @@ static void output_second_report(uint16_t holdoff_s)
     float ma_avg = monitored_value_avg(&m_ma);
     float mv_avg = monitored_value_avg(&m_mv);
     printf("%8d ", me.second_report.ix);
-    printf("V:%s>%s>%s [%s] ", ftostr1(m_mv.min), ftostr1(mv_avg), ftostr1(m_mv.max), ftostr1(me.set.volt * 1000.f));
+    if (dac_off)
+        printf("V:0.0>0.0>0.0 [%s] ", ftostr1(me.set.volt * 1000.f));
+    else
+        printf("V:%s>%s>%s [%s] ", ftostr1(m_mv.min), ftostr1(mv_avg), ftostr1(m_mv.max), ftostr1(me.set.volt * 1000.f));
     printf("I:%s>%s>%s [%s] ", ftostr1(m_ma.min), ftostr1(ma_avg), ftostr1(m_ma.max), ftostr1(me.set.curr * 1000.f));
     printf("DAC:%4d ", me.dac);
     if (holdoff_s)
@@ -492,13 +516,21 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     {
     case EVENT_SECOND_TICK:
     {
+        me.uptime_s++;
+        const uint32_t now_s = (uint32_t)me.uptime_s;
         uint16_t old_holdoff = me.holdoff;
         if (me.holdoff)
         {
             me.holdoff--;
             me.info.holdoff = me.holdoff;
-            ctrl_set_dac(0);
         }
+
+        const uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
+        if (cycle_s > 0 && (now_s % cycle_s) == 0)
+        {
+            me.flags.no_dac_period = false;
+        }
+        me.second_report.flags.no_dac_period = me.flags.no_dac_period;
         output_second_report(old_holdoff);
         event_add(&me.ev_status, EVENT_STATUS, &me.info);
     }
