@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include _CORTEX_CORE_HEADER
 #include "board.h"
+#include "controller.h"
 #include "cpu.h"
 #include "event.h"
 #include "events.h"
@@ -29,16 +30,19 @@ void SysTick_Handler(void)
 {
     me.uptime_seconds++;
     event_add(&me.ev_second, EVENT_SECOND_TICK, (void *)(uintptr_t)(uint32_t)(timer_uptime_ms()/1000));
-}
+} 
 
 static void event_handler(uint32_t type, void *arg)
 {
     if (type == EVENT_SECOND_TICK)
     {
+        if (ctrl_is_alert())
+            gpio_set(PIN_LED_R, 0);
         gpio_set(PIN_LED_G, 0);
         timer_halt_ms(1);
         gpio_set(PIN_LED_G, 1);
-        gpio_set(PIN_LED_R, 1);
+        if (!ctrl_is_alert_serious())
+            gpio_set(PIN_LED_R, 1);
     }
 };
 EVENT_HANDLER(event_handler);

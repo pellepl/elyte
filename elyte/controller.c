@@ -51,8 +51,8 @@ typedef union
 {
     struct
     {
-        bool no_dac_disconnect : 1;
-        bool no_dac_short : 1;
+        bool electrode_disconnect : 1;
+        bool electrode_short : 1;
         bool no_dac_period : 1;
     };
     uint32_t flags_all;
@@ -93,6 +93,10 @@ static struct
         monitored_value_t ma;
         flags_t flags;
     } second_report;
+
+    struct {
+        uint8_t alert;
+    } debug;
 } me;
 
 static void monitored_value_reset(monitored_value_t *v)
@@ -158,16 +162,16 @@ static void adc_current_gain_decrease(void)
 
 static void signal_short(uint16_t holdoff_s)
 {
-    me.second_report.flags.no_dac_short = true;
-    me.flags.no_dac_short = true;
+    me.second_report.flags.electrode_short = true;
+    me.flags.electrode_short = true;
     me.holdoff = holdoff_s;
     me.info.holdoff = me.holdoff;
 }
 
 static void signal_disconnect(uint16_t holdoff_s)
 {
-    me.second_report.flags.no_dac_disconnect = true;
-    me.flags.no_dac_disconnect = true;
+    me.second_report.flags.electrode_disconnect = true;
+    me.flags.electrode_disconnect = true;
     me.holdoff = holdoff_s;
     me.info.holdoff = me.holdoff;
 }
@@ -472,9 +476,20 @@ void ctrl_set_voltage_mv(int32_t volt)
     me.set.volt = (float)volt / 1000.f;
     me.set.enabled = true;
 }
+
 int32_t ctrl_get_voltage_mv(void)
 {
     return (int32_t)(me.set.volt * 1000.f);
+}
+
+bool ctrl_is_alert(void)
+{
+    return me.flags.electrode_disconnect || me.flags.electrode_short || me.flags.no_dac_period || me.debug.alert > 0;
+}
+
+bool ctrl_is_alert_serious(void)
+{
+    return me.flags.electrode_disconnect || me.flags.electrode_short || me.debug.alert > 1;
 }
 
 static void output_second_report(uint16_t holdoff_s)
@@ -500,9 +515,9 @@ static void output_second_report(uint16_t holdoff_s)
     printf("DAC:%4d ", me.dac);
     if (holdoff_s)
         printf("OFF:%ds ", holdoff_s);
-    if (flags.no_dac_disconnect)
+    if (flags.electrode_disconnect)
         printf("DIS ");
-    if (flags.no_dac_short)
+    if (flags.electrode_short)
         printf("SHO ");
     if (flags.no_dac_period)
         printf("PER[%s] ", ftostr1(setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV)));
@@ -554,3 +569,14 @@ static int cli_ctrl_log(int argc, const char **argv)
     return 0;
 }
 CLI_FUNCTION(cli_ctrl_log, "ctrl_log", "(0|1): log each dac adjustment")
+
+static int cli_ctrl_alert(int argc, const char **argv)
+{
+    if (argc > 0)
+    {
+        me.debug.alert = argv[0][0] - '0';
+    }
+    printf("CTRL ALERT: %d\n", me.debug.alert);
+    return 0;
+}
+CLI_FUNCTION(cli_ctrl_alert, "ctrl_alert", "(0|1|2): set alert level")
