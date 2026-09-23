@@ -491,7 +491,7 @@ static void output_second_report(uint16_t holdoff_s)
     cpu_primask_restore(primask);
     float ma_avg = monitored_value_avg(&m_ma);
     float mv_avg = monitored_value_avg(&m_mv);
-    printf("%8d ", me.second_report.ix);
+    printf("%08d ", me.second_report.ix);
     if (dac_off)
         printf("V:0.0>0.0>0.0 [%s] ", ftostr1(me.set.volt * 1000.f));
     else
