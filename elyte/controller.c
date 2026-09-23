@@ -71,10 +71,12 @@ static struct
     int32_t i_raw;
     int32_t v_raw;
     uint16_t dac;
-    volatile uint16_t holdoff;
+    volatile uint32_t holdoff;
     volatile uint64_t uptime_s;
     volatile flags_t flags;
     uint64_t start_s;
+    uint64_t disconnect_holdoff_ts;
+    uint64_t short_holdoff_ts;
     struct
     {
         bool enabled;
@@ -94,7 +96,8 @@ static struct
         flags_t flags;
     } second_report;
 
-    struct {
+    struct
+    {
         uint8_t alert;
     } debug;
 } me;
@@ -160,18 +163,20 @@ static void adc_current_gain_decrease(void)
     adc_adjust_gain_continuous(me.adc_current_gain);
 }
 
-static void signal_short(uint16_t holdoff_s)
+static void signal_short(uint32_t holdoff_s)
 {
     me.second_report.flags.electrode_short = true;
     me.flags.electrode_short = true;
+    me.short_holdoff_ts = me.uptime_s + holdoff_s;
     me.holdoff = holdoff_s;
     me.info.holdoff = me.holdoff;
 }
 
-static void signal_disconnect(uint16_t holdoff_s)
+static void signal_disconnect(uint32_t holdoff_s)
 {
     me.second_report.flags.electrode_disconnect = true;
     me.flags.electrode_disconnect = true;
+    me.disconnect_holdoff_ts = me.uptime_s + holdoff_s;
     me.holdoff = holdoff_s;
     me.info.holdoff = me.holdoff;
 }
@@ -196,11 +201,11 @@ static void adjust_dac(void)
         return;
     }
 
-    if (me.holdoff > 0)
-        return;
-
     if (me.set.curr == 0 || me.set.volt == 0)
+    {
+        ctrl_set_dac(0);
         return;
+    }
 
     uint32_t now_s = (uint32_t)me.uptime_s;
     dac_op_t last_op = me.dac_last_op;
@@ -233,6 +238,9 @@ static void adjust_dac(void)
         return;
     }
 
+    if (me.short_holdoff_ts < now_s)
+        me.flags.electrode_short = false;
+
     // check disconnect
     if (v_cur > 2.5f && dv_cur < -0.350f && dac == MIN_DAC_VAL)
     {
@@ -241,22 +249,31 @@ static void adjust_dac(void)
         return;
     }
 
+    if (me.disconnect_holdoff_ts < now_s)
+        me.flags.electrode_disconnect = false;
+
     bool dac_disable = false;
 
     // check periodic
     const uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
-    if (cycle_s > 0)
+    if (cycle_s > 0 && !me.flags.electrode_disconnect && !me.flags.electrode_short)
     {
         const uint32_t duty_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_DUTY_S);
         float mv_limit = setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV);
-        if ((v_avg * 1000.f >= mv_limit && (now_s % cycle_s) >= duty_s) || me.flags.no_dac_period)
+        if ((now_s % cycle_s) != 0)
         {
-            me.holdoff = 1;
-            me.info.holdoff = me.holdoff;
-            dac_disable = true;
-            signal_period();
+            if ((v_avg * 1000.f >= mv_limit && (now_s % cycle_s) >= duty_s) || me.flags.no_dac_period)
+            {
+                dac_disable = true;
+                signal_period();
+            }
         }
     }
+
+    dac_disable |= me.flags.electrode_disconnect;
+    dac_disable |= me.flags.electrode_short;
+    dac_disable |= me.flags.no_dac_period;
+    dac_disable |= me.holdoff > 0;
 
     if (!dac_disable)
     {
@@ -492,7 +509,7 @@ bool ctrl_is_alert_serious(void)
     return me.flags.electrode_disconnect || me.flags.electrode_short || me.debug.alert > 1;
 }
 
-static void output_second_report(uint16_t holdoff_s)
+static void output_second_report(uint32_t holdoff_s)
 {
 
     uint32_t primask = cpu_primask_save_and_disable();
@@ -533,12 +550,14 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     {
         me.uptime_s++;
         const uint32_t now_s = (uint32_t)me.uptime_s;
-        uint16_t old_holdoff = me.holdoff;
+        uint32_t old_holdoff = me.holdoff;
         if (me.holdoff)
-        {
             me.holdoff--;
-            me.info.holdoff = me.holdoff;
-        }
+        if (me.disconnect_holdoff_ts > now_s)
+            me.holdoff = max_u32(me.holdoff, (uint32_t)(me.disconnect_holdoff_ts - now_s));
+        if (me.short_holdoff_ts > now_s)
+            me.holdoff = max_u32(me.holdoff, (uint32_t)(me.short_holdoff_ts - now_s));
+        me.info.holdoff = me.holdoff;
 
         const uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
         if (cycle_s > 0 && (now_s % cycle_s) == 0)
