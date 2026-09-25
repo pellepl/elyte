@@ -19,7 +19,8 @@ static struct
     uint32_t button_longpress_mask;
     tick_t button_press_tick[_INPUT_BUTTON_COUNT];
     tick_t button_release_tick[_INPUT_BUTTON_COUNT];
-    event_t ev_hw_button[_INPUT_BUTTON_COUNT];
+    event_t ev_hw_button_press[_INPUT_BUTTON_COUNT];
+    event_t ev_hw_button_release[_INPUT_BUTTON_COUNT];
     event_t ev_button;
     event_t ev_hw_scroll;
     event_t ev_scroll;
@@ -166,14 +167,10 @@ static void button_event(uint32_t type, void *arg)
     if ((unsigned)button >= _INPUT_BUTTON_COUNT)
         return;
 
-    // Edges can coalesce while this event is queued. Read the current level
-    // rather than replaying an old press after its release was dropped.
-    bool pressed = button == INPUT_BUTTON_ROTARY
-        ? !LL_GPIO_IsInputPinSet(GPIOA, LL_GPIO_PIN_2)
-        : !LL_GPIO_IsInputPinSet(GPIOC, LL_GPIO_PIN_8);
-    if (pressed == input_is_button_pressed(button))
+    // Preserve queued edges: a short click may already be released by the
+    // time its press callback runs. Each edge has its own event object.
+    if (type == EVENT_BUTTON_PRESS && input_is_button_pressed(button))
         return;
-    type = pressed ? EVENT_BUTTON_PRESS : EVENT_BUTTON_RELEASE;
     switch (type)
     {
     case EVENT_BUTTON_PRESS:
@@ -201,7 +198,8 @@ static void button_event(uint32_t type, void *arg)
         {
             if (now - me.button_release_tick[but] > CLICK_COOLDOWN_TICKS)
             {
-                event_add(&me.ev_button, EVENT_UI_CLICK, (void *)but);
+                // Both physical buttons act as the rotary push button in the UI.
+                event_add(&me.ev_button, EVENT_UI_CLICK, (void *)INPUT_BUTTON_ROTARY);
             }
         }
 
@@ -226,9 +224,15 @@ static void event_handler(uint32_t type, void *arg)
         tick_t now = timer_now();
         for (input_button_t but = 0; but < _INPUT_BUTTON_COUNT; but++)
         {
-            // Reconcile the pin before testing the hold, even if an edge
-            // interrupt was missed or its callback is still queued.
-            button_event(0, (void *)(uintptr_t)but);
+            bool pressed = but == INPUT_BUTTON_ROTARY
+                ? !LL_GPIO_IsInputPinSet(GPIOA, LL_GPIO_PIN_2)
+                : !LL_GPIO_IsInputPinSet(GPIOC, LL_GPIO_PIN_8);
+            if (!pressed)
+            {
+                if (input_is_button_pressed(but))
+                    button_event(EVENT_BUTTON_RELEASE, (void *)(uintptr_t)but);
+                continue;
+            }
             if (!input_is_button_pressed(but) ||
                 (me.button_longpress_mask & (1 << but)) != 0 ||
                 (now < me.button_press_tick[but]) ||
@@ -236,7 +240,7 @@ static void event_handler(uint32_t type, void *arg)
                 ((me.button_during_rotation_mask & (1 << but)) != 0))
                 continue;
             me.button_longpress_mask |= (1 << but);
-            event_add(&me.ev_button, EVENT_UI_PRESSHOLD, (void *)but);
+            event_add(&me.ev_button, EVENT_UI_PRESSHOLD, (void *)INPUT_BUTTON_ROTARY);
         }
         break;
     }
@@ -286,11 +290,11 @@ void EXTI2_TSC_IRQHandler(void)
 
         if (LL_GPIO_IsInputPinSet(GPIOA, LL_GPIO_PIN_2))
         {
-            event_add_specific(&me.ev_hw_button[INPUT_BUTTON_ROTARY], EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_ROTARY, button_event);
+            event_add_specific(&me.ev_hw_button_release[INPUT_BUTTON_ROTARY], EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_ROTARY, button_event);
         }
         else
         {
-            event_add_specific(&me.ev_hw_button[INPUT_BUTTON_ROTARY], EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_ROTARY, button_event);
+            event_add_specific(&me.ev_hw_button_press[INPUT_BUTTON_ROTARY], EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_ROTARY, button_event);
         }
     }
 }
@@ -304,11 +308,11 @@ void EXTI9_5_IRQHandler(void)
 
         if (LL_GPIO_IsInputPinSet(GPIOC, LL_GPIO_PIN_8))
         {
-            event_add_specific(&me.ev_hw_button[INPUT_BUTTON_BACK], EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_BACK, button_event);
+            event_add_specific(&me.ev_hw_button_release[INPUT_BUTTON_BACK], EVENT_BUTTON_RELEASE, (void *)INPUT_BUTTON_BACK, button_event);
         }
         else
         {
-            event_add_specific(&me.ev_hw_button[INPUT_BUTTON_BACK], EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_BACK, button_event);
+            event_add_specific(&me.ev_hw_button_press[INPUT_BUTTON_BACK], EVENT_BUTTON_PRESS, (void *)INPUT_BUTTON_BACK, button_event);
         }
     }
 }
