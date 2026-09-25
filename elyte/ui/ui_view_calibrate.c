@@ -14,6 +14,7 @@
 #define DESCRIPTION "Connect a known resistor and press button. Longpress to abort."
 
 #define MAX_MEASURES 7
+#define ACTIVE_MEASURE_STABLE_COUNT 200
 
 typedef struct
 {
@@ -147,7 +148,7 @@ static void fit_and_store(void)
         if (!setting_get(ids[i], &setting) || !isfinite(values[i]) ||
             values[i] < setting.def->min || values[i] > setting.def->max)
         {
-            printf("ERROR: calibration setting %d out of range\n", (int)ids[i]);
+            printf("ERROR: calibration setting %d out of range %s < %s < %s\n", (int)ids[i], ftostr1(setting.def->min), ftostr1(values[i]), ftostr1(setting.def->max));
             return;
         }
         stored_values[i] = (int32_t)roundf(values[i]);
@@ -244,7 +245,8 @@ static void setting_cb(setting_id_t id, bool conf, int value)
 {
     if (!conf)
     {
-        if (id == SETTING_PRIVATE_PROFILE_VOLTAGE) {
+        if (id == SETTING_PRIVATE_PROFILE_VOLTAGE)
+        {
             kill_power();
             me.state = STATE_CONNECT_RESISTOR;
         }
@@ -314,7 +316,7 @@ static void on_info(void)
         else
             me.active_measure.sliding_current_ma = 0.9f * me.active_measure.sliding_current_ma + 0.1f * i_now_ma;
         me.active_measure.count++;
-        if (me.active_measure.count >= 500)
+        if (me.active_measure.count >= ACTIVE_MEASURE_STABLE_COUNT)
         {
             // assume stable enuf
             measure_t *m = &me.measures[me.cur_meas_ix];

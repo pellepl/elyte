@@ -78,6 +78,12 @@ static struct
     uint64_t disconnect_holdoff_ts;
     uint64_t short_holdoff_ts;
     bool calibration;
+
+    float calib_i_k;
+    float calib_i_m;
+    float calib_v_k;
+    float calib_v_m;
+
     struct
     {
         bool enabled;
@@ -389,6 +395,8 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     {
     case ADC_VOLTAGE:
         me.v_raw = raw;
+        if (!me.calibration)
+            val = val * me.calib_v_k + me.calib_v_m;
         monitored_value_register(&me.second_report.mv, val * 1000.f);
         avg_buffer_add(&me.voltage, val);
         me.info.voltage_cur = val;
@@ -398,6 +406,8 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     case ADC_CURRENT:
     {
         me.i_raw = raw;
+        if (!me.calibration)
+            val = val * me.calib_i_k + me.calib_i_m;
         monitored_value_register(&me.second_report.ma, val * 1000.f);
         avg_buffer_add(&me.current, val);
         me.info.current_cur = val;
@@ -416,11 +426,20 @@ static void ctrl_adc_cb(int res, adc_t adc, int32_t raw, float val)
     }
 }
 
+static void update_settings(void)
+{
+    me.calib_i_k = setting_get_val(SETTING_PRIVATE_CALIB_I_K);
+    me.calib_i_m = setting_get_val(SETTING_PRIVATE_CALIB_I_M) / 1000.f;
+    me.calib_v_k = setting_get_val(SETTING_PRIVATE_CALIB_V_K);
+    me.calib_v_m = setting_get_val(SETTING_PRIVATE_CALIB_V_M);
+    me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
+}
+
 void ctrl_start(void)
 {
-    me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
     if (!me.enabled)
     {
+        update_settings();
         me.start_s = timer_uptime_ms() / 1000;
         me.uptime_s = 0;
         monitored_value_reset(&me.second_report.ma);
@@ -439,7 +458,7 @@ void ctrl_stop(void)
 void ctrl_init(void)
 {
     int res;
-    me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
+    update_settings();
     me.adc_current_gain = GAIN_MIN;
     me.enabled = true;
     adc_adjust_gain_continuous(me.adc_current_gain);
@@ -569,7 +588,7 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     }
     break;
     case EVENT_SETTING_CHANGE:
-        me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
+        update_settings();
         break;
     case EVENT_CALIBRATION:
         me.calibration = (bool)(uintptr_t)arg;
