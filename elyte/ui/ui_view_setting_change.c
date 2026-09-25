@@ -91,7 +91,12 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     y += MSG_Y;
 
     char str[32];
-    snprintf(str, sizeof(str) - 1, "%d", me.setting.value);
+    if (me.setting.def->e % 3 == -1)
+        snprintf(str, sizeof(str) - 1, "%s", ftostr1((float)me.setting.value * 0.1f));
+    else if (me.setting.def->e % 3 == -2)
+        snprintf(str, sizeof(str) - 1, "%s", ftostr((float)me.setting.value * 0.01f));
+    else
+        snprintf(str, sizeof(str) - 1, "%d", me.setting.value);
     int w = gfx_string_width(UI_FONT_BIG, str);
     gfx_string(ctx, UI_FONT_BIG, str, DISP_W / 2 - w / 2, y, GFX_COL_SET);
     gfx_string(ctx, UI_FONT_MINI, me.setting.def->unit, DISP_W - 4 - me.unit_w, DISP_H - UI_FONT_MINI->max_height, GFX_COL_SET);

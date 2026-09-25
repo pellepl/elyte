@@ -77,6 +77,7 @@ static struct
     uint64_t start_s;
     uint64_t disconnect_holdoff_ts;
     uint64_t short_holdoff_ts;
+    bool calibration;
     struct
     {
         bool enabled;
@@ -256,7 +257,7 @@ static void adjust_dac(void)
 
     // check periodic
     const uint32_t cycle_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_PERIOD_S);
-    if (cycle_s > 0 && !me.flags.electrode_disconnect && !me.flags.electrode_short)
+    if (cycle_s > 0 && !me.flags.electrode_disconnect && !me.flags.electrode_short && !me.calibration)
     {
         const uint32_t duty_s = (uint32_t)setting_get_val(SETTING_CURR_CYCLE_DUTY_S);
         float mv_limit = setting_get_val(SETTING_CURR_CYCLE_LIMIT_MV);
@@ -570,6 +571,8 @@ static void ctrl_event_handler(uint32_t type, void *arg)
     case EVENT_SETTING_CHANGE:
         me.short_mV_at_10_mA = setting_get_val(SETTING_SHORT_MV_AT_10_MA);
         break;
+    case EVENT_CALIBRATION:
+        me.calibration = (bool)(uintptr_t)arg;
     default:
         break;
     }
