@@ -97,7 +97,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         {
             setting_t s;
             setting_get((setting_id_t)(sel_ix - 1), &s);
-            ui_setting_change(s.def->id, setting_confirm_change_cb);
+            ui_setting_change(s.def->id, setting_confirm_change_cb, this);
         }
         ui_trigger_update();
     }

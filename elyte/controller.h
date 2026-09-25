@@ -3,6 +3,9 @@
 #include <stdbool.h>
 #include "bmtypes.h"
 
+#define  MAX_VOLTAGE_MV 5000
+#define  MAX_CALIBRATION_RESISTOR_POWER_MW 250
+
 typedef enum
 {
     IDLE,

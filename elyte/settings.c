@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "controller.h"
 #include "events.h"
 #include "flash_driver.h"
 #include "minio.h"
@@ -11,7 +12,7 @@
 #define NVMTNVJ_TAG_SIZE 12
 static void persistence_init(void);
 
-const setting_def_t defs[] = {
+const setting_def_t defs[SETTING_COUNT_ALL] = {
     [SETTING_SCREEN_ALIVE_S] = {.id = SETTING_SCREEN_ALIVE_S,
                                 .name = "Screen alive",
                                 .unit = "s",
@@ -64,17 +65,37 @@ const setting_def_t defs[] = {
                                    .min = -25,
                                    .e = -3,
                                    .tag = 6},
+
+    [SETTING_PRIVATE_PROFILE_RESISTANCE] = {.id = SETTING_PRIVATE_PROFILE_RESISTANCE,
+                                            .name = "Resistance",
+                                            .descr = "Profiling resistance value",
+                                            .unit = "R",
+                                            .def = 10,
+                                            .max = 10000,
+                                            .min = 10,
+                                            .e = -1,
+                                            .tag = 0},
+    [SETTING_PRIVATE_PROFILE_VOLTAGE] = {.id = SETTING_PRIVATE_PROFILE_VOLTAGE,
+                                         .name = "Voltage",
+                                         .descr = "Measured voltage over resistance",
+                                         .unit = "mV",
+                                         .def = 10,
+                                         .max = MAX_VOLTAGE_MV,
+                                         .min = 1,
+                                         .e = -3,
+                                         .tag = 0},
+
 };
 
 static struct
 {
-    int32_t setting_vals[SETTING_COUNT];
+    int32_t setting_vals[SETTING_COUNT_ALL];
     event_t ev_setting_change;
 } me;
 
 setting_t *setting_get(setting_id_t id, setting_t *s)
 {
-    if (id >= SETTING_COUNT)
+    if (id >= SETTING_COUNT_ALL)
         return NULL;
     s->def = &defs[id];
     s->value = me.setting_vals[id];
@@ -87,7 +108,7 @@ void settings_init(void)
     for (size_t i = 0; i < ARRAY_LEN(defs); i++)
     {
         const setting_def_t *def = &defs[i];
-        if (def->tag == 0)
+        if (def->tag == 0) // non persistent setting, use default value
         {
             me.setting_vals[def->id] = def->def;
             continue;
@@ -96,6 +117,7 @@ void settings_init(void)
         int res = nvmtnvj_read(def->tag, data);
         if (res < 0)
         {
+            // couldn't read setting, use default value
             me.setting_vals[def->id] = def->def;
             if (res != ERR_NVMTNVJ_NOENT)
                 printf("ERROR: settings init %d\n", res);
@@ -116,7 +138,7 @@ float setting_get_val(setting_id_t id)
         1e-6f, 1e-5f, 1e-4f, 1e-3f, 1e-2f, 1e-1f,
         1e0f,
         1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f};
-    if (id >= SETTING_COUNT)
+    if (id >= SETTING_COUNT_ALL)
         return NAN;
     int8_t e_ix = defs[id].e + ARRAY_LEN(pow10) / 2;
     if (e_ix < 0 || e_ix >= (int8_t)ARRAY_LEN(pow10))
@@ -127,7 +149,7 @@ float setting_get_val(setting_id_t id)
 int setting_set(setting_id_t id, int val)
 {
     int err = 0;
-    if (id >= SETTING_COUNT)
+    if (id >= SETTING_COUNT_ALL)
         return -1;
     val = clamp_i32(defs[id].min, val, defs[id].max);
     if (defs[id].tag)

@@ -7,4 +7,4 @@ extern const ui_view_t view_confirm;
 extern const ui_view_t view_info;
 extern const ui_view_t view_settings;
 extern const ui_view_t view_setting_change;
-extern const ui_view_t view_graph;
+extern const ui_view_t view_calibrate;

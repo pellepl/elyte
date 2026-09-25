@@ -13,7 +13,7 @@
 #define _str(x) __str(x)
 #define __str(x) #x
 
-#define UI_MODIFICATION_TMO_S   15
+#define UI_MODIFICATION_TMO_S   180
 
 #define ARRAY_LENGTH(x) (sizeof(x) / (sizeof((x)[0])))
 
@@ -70,4 +70,4 @@ typedef void (*ui_confirm_cb_t)(bool conf, const void *user);
 void ui_confirm(const char *title, const char *msg, ui_confirm_cb_t cb, const void *user);
 
 typedef void (*ui_setting_confirm_cb_t)(setting_id_t id, bool conf, int value);
-void ui_setting_change(setting_id_t id, ui_setting_confirm_cb_t cb);
+void ui_setting_change(setting_id_t id, ui_setting_confirm_cb_t cb, const ui_view_t *parent_view);

@@ -6,7 +6,6 @@
 #include "ui_views.h"
 #include "ui_scrolltext.h"
 
-
 #define MSG_Y (DISP_H / 4 + 6)
 static struct
 {
@@ -15,6 +14,7 @@ static struct
     int descr_w;
     int unit_w;
     setting_t setting;
+    const ui_view_t *parent_view;
     ui_scrolltext_t title_scrl;
     ui_scrolltext_t descr_scrl;
     ui_setting_confirm_cb_t cb;
@@ -44,13 +44,15 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
     case EVENT_UI_PRESSHOLD:
         if (me.cb)
             me.cb(me.setting.def->id, false, me.setting.value);
-        ui_goto_view(&view_settings, true);
+        if (me.parent_view)
+            ui_goto_view(me.parent_view, true);
         ui_trigger_update();
         break;
     case EVENT_UI_CLICK:
         if (me.cb)
             me.cb(me.setting.def->id, true, me.setting.value);
-        ui_goto_view(&view_settings, true);
+        if (me.parent_view)
+            ui_goto_view(me.parent_view, true);
         ui_trigger_update();
         break;
     case EVENT_UI_SCRL:
@@ -64,7 +66,8 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
         {
             if (me.cb)
                 me.cb(me.setting.def->id, false, me.setting.value);
-            ui_goto_view(&view_settings, true);
+            if (me.parent_view)
+                ui_goto_view(me.parent_view, true);
             ui_trigger_update();
         }
     default:
@@ -85,7 +88,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
         t = min_u32(t, ui_scrolltext_paint(&me.descr_scrl, ctx));
     else
         gfx_string(ctx, UI_FONT_SMALL, me.setting.def->descr, DISP_W / 2 - me.descr_w / 2, y, GFX_COL_SET);
-    y +=  MSG_Y;
+    y += MSG_Y;
 
     char str[32];
     snprintf(str, sizeof(str) - 1, "%d", me.setting.value);
@@ -95,10 +98,11 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     return t;
 }
 
-void ui_setting_change(setting_id_t id, ui_setting_confirm_cb_t cb)
+void ui_setting_change(setting_id_t id, ui_setting_confirm_cb_t cb, const ui_view_t *parent_view)
 {
     if (setting_get(id, &me.setting) == NULL)
         return;
+    me.parent_view = parent_view;
     me.cb = cb;
 
     me.title_w = gfx_string_width(UI_FONT_NORMAL, me.setting.def->name);

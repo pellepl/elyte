@@ -480,7 +480,6 @@ void ctrl_request_status(status_info_t *dst)
 void ctrl_set_current_ma(int32_t curr)
 {
     me.set.curr = (float)curr / 1000.f;
-    me.set.enabled = true;
 }
 
 int32_t ctrl_get_current_ma(void)
@@ -491,7 +490,6 @@ int32_t ctrl_get_current_ma(void)
 void ctrl_set_voltage_mv(int32_t volt)
 {
     me.set.volt = (float)volt / 1000.f;
-    me.set.enabled = true;
 }
 
 int32_t ctrl_get_voltage_mv(void)

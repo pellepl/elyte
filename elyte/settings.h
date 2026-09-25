@@ -5,13 +5,17 @@
 #include <stdint.h>
 
 typedef enum {
+    // the first settins up to SETTING_COUNT is shown in ui_view_settings list
     SETTING_SCREEN_ALIVE_S,
     SETTING_CURR_CYCLE_LIMIT_MV,
     SETTING_CURR_CYCLE_PERIOD_S,
     SETTING_CURR_CYCLE_DUTY_S,
     SETTING_SERVO_DELTA_S,
     SETTING_SHORT_MV_AT_10_MA,
-    SETTING_COUNT
+    SETTING_COUNT,
+    SETTING_PRIVATE_PROFILE_RESISTANCE = SETTING_COUNT,
+    SETTING_PRIVATE_PROFILE_VOLTAGE,
+    SETTING_COUNT_ALL
 } setting_id_t;
 
 typedef struct {
