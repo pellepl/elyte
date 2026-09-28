@@ -304,7 +304,7 @@ static void on_info(void)
     if (me.state != STATE_SET_AMP)
         return;
 
-    float i_now_ma = me.info.current_avg * 1000.f;
+    float i_now_ma = me.info.current_avg_ma;
     float di_ma = abs_f(me.active_measure.target_current_ma - i_now_ma);
     // allow from 0.2ma to 2ma or 10% of target current difference, whatever is smallest
     float max_di_ma = min_f(2.f, me.active_measure.target_current_ma * 0.1f);
@@ -322,7 +322,7 @@ static void on_info(void)
             measure_t *m = &me.measures[me.cur_meas_ix];
             m->i_local_ma = i_now_ma;
             m->r_real_mohm = me.resistance_mohm;
-            m->v_local_mv = me.info.voltage_avg * 1000.f;
+            m->v_local_mv = me.info.voltage_avg_mv;
             setting_set(SETTING_PRIVATE_PROFILE_VOLTAGE, (int32_t)round_nearest_f(m->v_local_mv));
             me.state = STATE_REQUEST_VOLTAGE;
             ui_setting_change(SETTING_PRIVATE_PROFILE_VOLTAGE, setting_cb, &view_calibrate);
@@ -375,7 +375,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
         gfx_string(ctx, UI_FONT_SMALL, str, (DISP_W - cw) / 2, y, GFX_COL_SET);
 
         y += UI_FONT_SMALL->max_height + 4;
-        sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+        sprintf(str, "%s", ftostr1(me.info.current_avg_ma));
         gfx_string(ctx, UI_FONT_NORMAL, str, 4, y, GFX_COL_SET);
         sprintf(str, "%s", ftostr1(me.active_measure.target_current_ma));
         gfx_string(ctx, UI_FONT_NORMAL, str, DISP_W / 2, y, GFX_COL_SET);

@@ -65,10 +65,10 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     sprintf(str, "Holdoff %d", info.holdoff);
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
-    sprintf(str, "CURR %s mA", ftostr1(info.current_avg * 1000.f));
+    sprintf(str, "CURR %s mA", ftostr1(info.current_avg_ma));
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
-    sprintf(str, "VOLT %s mV", ftostr1(info.voltage_avg * 1000.f));
+    sprintf(str, "VOLT %s mV", ftostr1(info.voltage_avg_mv));
     gfx_string(ctx, UI_FONT_MINI, str, x, y, GFX_COL_SET);
     NL;
 

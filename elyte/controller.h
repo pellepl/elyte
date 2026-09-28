@@ -18,10 +18,10 @@ typedef enum
 typedef struct {
     uint16_t dac;
     bool dac_off;
-    float current_avg;
-    float voltage_avg;
-    float current_cur;
-    float voltage_cur;
+    float current_avg_ma;
+    float voltage_avg_mv;
+    float current_cur_ma;
+    float voltage_cur_mv;
     uint16_t holdoff;
     dac_op_t dac_op;
     dac_op_t dac_op_dec;

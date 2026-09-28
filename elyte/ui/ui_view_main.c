@@ -125,7 +125,7 @@ static void handle_event(const ui_view_t *this, uint32_t type, void *arg)
     case EVENT_STATUS:
         me.info = *((status_info_t *)arg);
         if (me.info.dac == 0 && me.info.dac_off)
-            me.info.voltage_avg = 0.f;
+            me.info.voltage_avg_mv = 0.f;
         ui_trigger_update();
         break;
 
@@ -159,7 +159,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
     {
         int16_t y = i ? Y_CURRENT : Y_VOLTAGE;
         const char *unit_str = i ? "mA" : "mV";
-        int32_t value = (int32_t)((i ? me.info.current_avg : me.info.voltage_avg) * 1000);
+        int32_t value = (int32_t)(i ? me.info.current_avg_ma : me.info.voltage_avg_mv);
         uint32_t setting = i ? me.ui.i_ma : me.ui.v_mv;
         bool select = i ? me.adjust == SELECT_CURRENT : me.adjust == SELECT_VOLTAGE;
         bool adjust = i ? me.adjust == ADJUST_CURRENT : me.adjust == ADJUST_VOLTAGE;
@@ -180,7 +180,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
             else
             {
                 if (i)
-                    sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+                    sprintf(str, "%s", ftostr1(me.info.current_avg_ma));
                 else
                     sprintf(str, "%d", value);
             }
@@ -199,7 +199,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
             else
             {
                 if (i)
-                    sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+                    sprintf(str, "%s", ftostr1(me.info.current_avg_ma));
                 else
                     sprintf(str, "%d", value);
             }
@@ -215,7 +215,7 @@ static ui_tick_t paint(const ui_view_t *this, const gfx_ctx_t *ctx)
             else
             {
                 if (i)
-                    sprintf(str, "%s", ftostr1(me.info.current_avg * 1000.f));
+                    sprintf(str, "%s", ftostr1(me.info.current_avg_ma));
                 else
                     sprintf(str, "%d", value);
             }
